@@ -13,11 +13,11 @@ datasource db {
 }
 
 model Dueno {
-  id             Int         @id @default(autoincrement())
+  id             Int           @id @default(autoincrement())
   nombre         String
-  cedula         String      @unique
+  cedula         String        @unique
   telefono       String?
-  cuentaBancaria String?     @map("cuenta_bancaria")
+  cuentaBancaria String?       @map("cuenta_bancaria")
   banco          String?
   estado         EstadoGeneral @default(ACTIVO)
 
@@ -32,29 +32,29 @@ model Cooperativa {
   ruc    String        @unique
   estado EstadoGeneral @default(ACTIVO)
 
-  buses  Bus[]
+  buses Bus[]
 
   @@map("cooperativas")
 }
 
 model Bus {
-  id           Int          @id @default(autoincrement())
-  cooperativaId Int         @map("cooperativa_id")
-  duenoId      Int          @map("dueno_id")
-  placa        String       @unique
-  marca        String
-  carroceria   String
-  modelo       String
-  anio         Int
-  capacidad    Int
-  color        String?
-  estado       EstadoBus    @default(ACTIVO)
+  id            Int       @id @default(autoincrement())
+  cooperativaId Int       @map("cooperativa_id")
+  duenoId       Int       @map("dueno_id")
+  placa         String    @unique
+  marca         String
+  carroceria    String
+  modelo        String
+  anio          Int
+  capacidad     Int
+  color         String?
+  estado        EstadoBus @default(ACTIVO)
 
-  cooperativa  Cooperativa    @relation(fields: [cooperativaId], references: [id])
-  dueno        Dueno          @relation(fields: [duenoId], references: [id])
-  asientos     Asiento[]
-  frecuencias  Frecuencia[]
-  turnos       Turno[]
+  cooperativa Cooperativa  @relation(fields: [cooperativaId], references: [id])
+  dueno       Dueno        @relation(fields: [duenoId], references: [id])
+  asientos    Asiento[]
+  frecuencias Frecuencia[]
+  turnos      Turno[]
 
   @@map("buses")
 }
@@ -81,9 +81,9 @@ model Ruta {
   duracionMin  Int     @map("duracion_min")
   precioPasaje Decimal @map("precio_pasaje") @db.Decimal(10, 2)
 
-  paradas    Parada[]
+  paradas     Parada[]
   frecuencias Frecuencia[]
-  turnos     Turno[]
+  turnos      Turno[]
 
   @@map("rutas")
 }
@@ -103,12 +103,12 @@ model Parada {
 }
 
 model Frecuencia {
-  id          Int    @id @default(autoincrement())
-  rutaId      Int    @map("ruta_id")
-  busId       Int    @map("bus_id")
+  id          Int       @id @default(autoincrement())
+  rutaId      Int       @map("ruta_id")
+  busId       Int       @map("bus_id")
   diaSemana   DiaSemana @map("dia_semana")
-  horaSalida  String @map("hora_salida")
-  horaLlegada String @map("hora_llegada")
+  horaSalida  String    @map("hora_salida")
+  horaLlegada String    @map("hora_llegada")
 
   ruta Ruta @relation(fields: [rutaId], references: [id])
   bus  Bus  @relation(fields: [busId], references: [id])
@@ -136,11 +136,11 @@ model Turno {
 }
 
 model Asiento {
-  id     Int          @id @default(autoincrement())
-  busId  Int          @map("bus_id")
+  id     Int           @id @default(autoincrement())
+  busId  Int           @map("bus_id")
   numero Int
   fila   String?
-  tipo   TipoAsiento  @default(NORMAL)
+  tipo   TipoAsiento   @default(NORMAL)
   estado EstadoGeneral @default(ACTIVO)
 
   bus    Bus            @relation(fields: [busId], references: [id])
@@ -151,10 +151,10 @@ model Asiento {
 }
 
 model AsientoTurno {
-  id        Int               @id @default(autoincrement())
-  turnoId   Int               @map("turno_id")
-  asientoId Int               @map("asiento_id")
-  boletoId  Int?              @map("boleto_id")
+  id        Int                @id @default(autoincrement())
+  turnoId   Int                @map("turno_id")
+  asientoId Int                @map("asiento_id")
+  boletoId  Int?               @map("boleto_id")
   estado    EstadoAsientoTurno @default(DISPONIBLE)
 
   turno   Turno   @relation(fields: [turnoId], references: [id])

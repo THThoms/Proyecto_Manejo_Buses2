@@ -27,23 +27,23 @@ model Usuario {
 }
 
 model Rol {
-  id          Int    @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   nombre      NombreRol @unique
   descripcion String?
 
-  usuarios  UsuarioRol[]
-  permisos  RolPermiso[]
+  usuarios UsuarioRol[]
+  permisos RolPermiso[]
 
   @@map("roles")
 }
 
 model UsuarioRol {
-  id          Int       @id @default(autoincrement())
-  usuarioId   Int       @map("usuario_id")
-  rolId       Int       @map("rol_id")
-  asignadoPor Int?      @map("asignado_por")
-  asignadoEn  DateTime  @default(now()) @map("asignado_en")
-  expiraEn    DateTime? @map("expira_en")
+  id          Int              @id @default(autoincrement())
+  usuarioId   Int              @map("usuario_id")
+  rolId       Int              @map("rol_id")
+  asignadoPor Int?             @map("asignado_por")
+  asignadoEn  DateTime         @default(now()) @map("asignado_en")
+  expiraEn    DateTime?        @map("expira_en")
   estado      EstadoRolUsuario @default(ACTIVO)
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
@@ -54,7 +54,7 @@ model UsuarioRol {
 }
 
 model Permiso {
-  id          Int    @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   nombre      NombrePermiso @unique
   descripcion String?
 
