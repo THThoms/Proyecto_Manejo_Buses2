@@ -26,10 +26,15 @@ model Dueno {
 }
 
 model Cooperativa {
-  id     Int           @id @default(autoincrement())
-  nombre String
-  ruc    String        @unique
-  estado EstadoGeneral @default(ACTIVO)
+  id             Int           @id @default(autoincrement())
+  nombre         String
+  ruc            String        @unique
+  logoUrl        String?       @map("logo_url")
+  cuentaBancaria String?       @map("cuenta_bancaria")
+  banco          String?
+  telefono       String?
+  email          String?
+  estado         EstadoGeneral @default(ACTIVO)
 
   buses  Bus[]
 
@@ -40,6 +45,7 @@ model Bus {
   id           Int          @id @default(autoincrement())
   cooperativaId Int         @map("cooperativa_id")
   duenoId      Int          @map("dueno_id")
+  numeroDisco  Int?         @map("numero_disco")
   placa        String       @unique
   marca        String
   carroceria   String
@@ -47,6 +53,7 @@ model Bus {
   anio         Int
   capacidad    Int
   color        String?
+  fotoUrl      String?      @map("foto_url")
   estado       EstadoBus    @default(ACTIVO)
 
   cooperativa  Cooperativa    @relation(fields: [cooperativaId], references: [id])
@@ -102,12 +109,14 @@ model Parada {
 }
 
 model Frecuencia {
-  id          Int    @id @default(autoincrement())
-  rutaId      Int    @map("ruta_id")
-  busId       Int    @map("bus_id")
-  diaSemana   DiaSemana @map("dia_semana")
-  horaSalida  String @map("hora_salida")
-  horaLlegada String @map("hora_llegada")
+  id             Int           @id @default(autoincrement())
+  rutaId         Int           @map("ruta_id")
+  busId          Int           @map("bus_id")
+  diaSemana      DiaSemana     @map("dia_semana")
+  horaSalida     String        @map("hora_salida")
+  horaLlegada    String        @map("hora_llegada")
+  resolucionAnt  String?       @map("resolucion_ant")
+  estado         EstadoGeneral @default(ACTIVO)
 
   ruta Ruta @relation(fields: [rutaId], references: [id])
   bus  Bus  @relation(fields: [busId], references: [id])
@@ -130,6 +139,7 @@ model Turno {
   chofer Chofer @relation(fields: [choferId], references: [id])
 
   asientosTurno AsientoTurno[]
+  ubicaciones   UbicacionBus[]
 
   @@map("turnos")
 }
@@ -161,6 +171,33 @@ model AsientoTurno {
 
   @@unique([turnoId, asientoId])
   @@map("asiento_turnos")
+}
+
+// ============================================
+// NUEVAS ENTIDADES
+// ============================================
+
+model UbicacionBus {
+  id           Int      @id @default(autoincrement())
+  turnoId      Int      @map("turno_id")
+  latitud      Decimal  @db.Decimal(10, 8)
+  longitud     Decimal  @db.Decimal(11, 8)
+  velocidad    Decimal? @db.Decimal(5, 2)
+  registradoEn DateTime @default(now()) @map("registrado_en")
+
+  turno Turno @relation(fields: [turnoId], references: [id])
+
+  @@map("ubicaciones_bus")
+}
+
+model ConfiguracionApp {
+  id            Int      @id @default(autoincrement())
+  clave         String   @unique
+  valor         String
+  tipo          TipoConfiguracion @default(TEXTO)
+  actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
+
+  @@map("configuracion_app")
 }
 
 // ============================================
@@ -206,4 +243,11 @@ enum DiaSemana {
   VIE
   SAB
   DOM
+}
+
+enum TipoConfiguracion {
+  TEXTO
+  NUMERO
+  COLOR
+  URL
 }
