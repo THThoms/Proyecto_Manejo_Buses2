@@ -34,14 +34,18 @@ model Boleto {
   uuidQr          String       @unique @default(uuid()) @map("uuid_qr")
   cedulaPasajero  String       @map("cedula_pasajero")
   nombrePasajero  String       @map("nombre_pasajero")
+  asientoNumero   Int?         @map("asiento_numero")
+  asientoTipo     String?      @map("asiento_tipo")
+  rutaNombre      String?      @map("ruta_nombre")
   tipoTarifa      TipoTarifa   @default(NORMAL) @map("tipo_tarifa")
   estado          EstadoBoleto @default(PENDIENTE)
   expiraEn        DateTime     @map("expira_en")
   creadoEn        DateTime     @default(now()) @map("creado_en")
 
-  compra        Compra        @relation(fields: [compraId], references: [id])
-  escaneo       Escaneo?
-  boletoParada  BoletoParada?
+  compra            Compra             @relation(fields: [compraId], references: [id])
+  escaneo           Escaneo?
+  boletoParada      BoletoParada?
+  registroDescuento RegistroDescuento?
 
   @@map("boletos")
 }
@@ -136,25 +140,41 @@ model BoletoParada {
   paradaDestinoId  Int               @map("parada_destino_id")  // Bus Service
   estado           EstadoBoletoParada @default(PENDIENTE)
 
-  boleto     Boleto       @relation(fields: [boletoId], references: [id])
-  alertasGps AlertaGps[]
+  boleto         Boleto          @relation(fields: [boletoId], references: [id])
+  alertasParada  AlertaParada[]
 
   @@map("boleto_paradas")
 }
 
-model AlertaGps {
-  id              Int          @id @default(autoincrement())
-  boletoParadaId  Int          @map("boleto_parada_id")
-  turnoId         Int          @map("turno_id")   // Bus Service
-  latActual       Decimal      @map("lat_actual") @db.Decimal(10, 8)
-  lngActual       Decimal      @map("lng_actual") @db.Decimal(11, 8)
-  metrosRestantes Int          @map("metros_restantes")
-  estado          EstadoAlerta @default(ACTIVA)
-  actualizadoEn   DateTime     @default(now()) @updatedAt @map("actualizado_en")
+// ============================================
+// NUEVAS ENTIDADES
+// ============================================
 
-  boletoParada BoletoParada @relation(fields: [boletoParadaId], references: [id])
+model RegistroDescuento {
+  id         Int        @id @default(autoincrement())
+  cedula     String
+  boletoId   Int        @unique @map("boleto_id")
+  tipoTarifa TipoTarifa @map("tipo_tarifa")
+  aplicadoEn DateTime   @default(now()) @map("aplicado_en")
 
-  @@map("alertas_gps")
+  boleto Boleto @relation(fields: [boletoId], references: [id])
+
+  @@index([cedula, aplicadoEn])
+  @@map("registro_descuentos")
+}
+
+model AlertaParada {
+  id              Int              @id @default(autoincrement())
+  turnoId         Int              @map("turno_id")      // Bus Service
+  paradaId        Int              @map("parada_id")     // Bus Service
+  boletoParadaId  Int?             @map("boleto_parada_id")
+  tipo            TipoAlerta
+  estado          EstadoAlertaParada @default(PENDIENTE)
+  creadoEn        DateTime         @default(now()) @map("creado_en")
+
+  boletoParada BoletoParada? @relation(fields: [boletoParadaId], references: [id])
+
+  @@map("alertas_parada")
 }
 
 // ============================================
@@ -228,8 +248,15 @@ enum EstadoBoletoParada {
   BAJADO
 }
 
-enum EstadoAlerta {
-  ACTIVA
-  DISPARADA
-  INACTIVA
+enum TipoAlerta {
+  CHOFER
+  PASAJERO
 }
+
+enum EstadoAlertaParada {
+  PENDIENTE
+  ENVIADA
+  LEIDA
+}
+
+
