@@ -1,0 +1,196 @@
+PLANIFICACION DEL PROYECTO
+Plataforma de Gestion y Venta de Pasajes
+Transporte Interprovincial  |  Ecuador
+
+Metodologia: Scrum + XP  |  Equipo de 7 personas
+Universidad Tecnica de Ambato  |  Carrera de Software
+Inicio: 26 Abr 2026   |   Cierre objetivo: 12 May 2026   |   Deadline: 15 May 2026
+
+1. Vision General del Proyecto
+Se aplica una combinacion de Scrum (marco de gestion iterativa) con practicas de Extreme Programming (XP) para garantizar entregas de alta calidad en un plazo muy ajustado. El equipo esta compuesto por 7 personas con roles claramente definidos, 3 duos de pair programming y un Tech Lead que opera en solitario sobre el modulo mas critico (auth-api).
+
+La meta es tener el sistema funcional y desplegado el 12 de mayo, dejando 3 dias de buffer (13-15 May) para afinamiento, polish de UI y demo final. El Sprint 0 (26 Abr) es ejecutado exclusivamente por Allen para dejar el entorno 100% listo antes de que el equipo completo arranque el Sprint 1.
+
+2. Equipo de Desarrollo (7 personas)
+
+
+3. Duos de Pair Programming (XP)
+
+
+Nota: Los duos son permanentes durante todo el proyecto. Cada duo hace su propia micro-retro de codigo al cerrar cada tarea. Allen actua como reviewer flotante para todos los duos y aprueba PRs criticos antes de merge a main.
+
+4. Roles del Equipo (Scrum + XP)
+
+
+5. Practicas XP Aplicadas
+
+
+6. Calendario de Sprints
+
+
+Nota: El Sprint 0 (26 Abr) es ejecutado en solitario por Allen (Tech Lead). Cubre la configuracion completa del entorno para que el equipo arranque sin friccion tecnica el 27 de Abril.
+
+7. Product Backlog Priorizado
+Escala de estimacion (Story Points): 1 = trivial, 3 = pequeno, 5 = medio, 8 = complejo, 13 = muy complejo. La columna Responsable indica quien lidera la historia (individual o duo).
+
+
+8. Sprint 0: Setup del Entorno (26 Abril)
+Responsable exclusivo: Allen (Tech Lead)
+
+Objetivo: Dejar el entorno 100% listo para que los 6 miembros restantes arranquen el Sprint 1 el 27 de Abril sin ninguna friccion tecnica. Este sprint no tiene historias de usuario formales.
+
+Checklist Sprint 0 — Allen
+Crear repositorio Git con estructura monorepo (TurboRepo) y ramas: main, staging, develop.
+Inicializar paquetes del monorepo: auth-api, bus-api, ticket-api, frontend-web, frontend-pwa, packages/database.
+Configurar TypeScript, ESLint y Prettier compartidos en el root del monorepo.
+Definir schema Prisma completo en packages/database (todas las entidades del sistema).
+Conectar a PostgreSQL local y ejecutar migraciones iniciales. Verificar que Juan pueda operar desde packages/database.
+Instalar dependencias criticas: Prisma, Tailwind CSS, qrcode, Nodemailer, Stripe SDK, NextAuth.
+Configurar GitHub Actions: build + lint + tests en cada push para todos los paquetes.
+Configurar despliegue automatico a staging en Vercel/Railway al hacer merge a develop.
+Crear tablero Kanban con columnas: Backlog / En progreso / En revision / Hecho. Cargar las 25 historias.
+Invitar a todos los miembros al repositorio con sus permisos correspondientes.
+Realizar primer commit y verificar que el pipeline CI/CD pase completamente.
+Documentar en README: como instalar, variables de entorno necesarias y como correr cada paquete.
+
+Al finalizar el Sprint 0, Allen notifica al equipo que el entorno esta listo y cada quien puede clonar el repo e iniciar su modulo asignado.
+
+9. Sprint 1: Cooperativas, Flota, Rutas y Compra Base
+Fechas: 27 Abril -> 3 Mayo 2026   |   44 Story Points   |   7 personas activas
+
+Meta del Sprint: El usuario puede buscar rutas con filtros, ver el detalle del bus, seleccionar su asiento e ingresar su cedula para calcular el precio con descuento. Las cooperativas gestionan su flota y hoja de ruta.
+
+
+Ceremonia: Sprint Planning (27 Abr, 30 min) — Tomas Solis facilita
+Confirmar las 9 historias del Sprint 1 con todo el equipo.
+Duo A (Allen+Gabriela): liderar US04, US05 y US08. Allen lidera US02 y US03 en solitario.
+Gabriela lidera US06 y US07 en solitario.
+Allen lidera US01 y US09 en solitario (auth y descuento por cedula).
+Juan: preparar migraciones de las entidades de Sprint 1 en packages/database.
+David: revisar la PWA base y preparar entorno para Sprint 2.
+
+Daily Standups Sprint 1 — Tomas Solis modera (10 min, manana)
+27 Abr: Arranque. Allen: US02 + US01 schema. Gabriela: US06 wireframes.
+28 Abr: Allen: US03 + US01 API CRUD. Gabriela: US07. Juan: migraciones S1.
+29 Abr: Duo A arranca US04 + US05 (par). Gabriela: US06 endpoint.
+30 Abr: Duo A: US05 continua (algoritmo hoja de ruta). Allen: US09 logica descuento TDD.
+1 May: Duo A: US05 termina, inicia US08 (SeatMap). Allen: US09 regla anti-fraude 24h.
+2 May: Duo A: US08 termina. Gabriela: US07 BusCard. Code review general.
+3 May: Buffer interno, fix bugs, preparar demo Sprint 1.
+
+Criterios de Aceptacion Adicionales (Sprint 1)
+US04: El panel de cooperativa debe incluir un mapa de previsualizacion de paradas intermedias con sus coordenadas GPS (latitud, longitud) renderizadas visualmente.
+
+Ceremonia: Sprint Review (3 May, 20 min)
+Allen demuestra: US02 (registro bus), US03 (frecuencias ANT).
+Duo A demuestra: US05 (hoja de ruta), US08 (mapa de asientos).
+Gabriela demuestra: US06 (busqueda con filtros), US07 (ficha del bus).
+Allen demuestra: US01 (cooperativas), US09 (descuento + anti-fraude).
+
+Ceremonia: Retrospectiva (3 May, 15 min) — Tomas Solis facilita
+Que funciono bien en los duos.
+Que fue dificil o lento.
+1 accion concreta de mejora para Sprint 2.
+
+10. Sprint 2: Pagos, QR, GPS y Reportes
+Fechas: 4 Mayo -> 10 Mayo 2026   |   62 Story Points   |   7 personas activas
+
+Meta del Sprint: Los 4 metodos de pago completos, boletos QR de un solo uso, validacion por escaneo, GPS con alertas a chofer y pasajero, y reportes/liquidaciones para el administrador.
+
+
+Distribucion de cargas en Sprint 2
+Duo B (Sebastian+Andrew): US10 (tarjeta, 8 SP) y US13 (efectivo oficina, 5 SP). El mas pesado va al duo mas solido en backend.
+Andrew en solitario: US11, US12, US15, US19, US20. Nucleo transaccional del ticket-api.
+Duo A (Allen+Gabriela): US17 (GPS chofer, 8 SP). Logica mas compleja del Sprint 2.
+Duo C (Juan+David): US16 (escaneo QR) y US18 (alerta GPS pasajero). PWA + QA integrado.
+David en solitario: US14 (efectivo en bus, PWA chofer).
+
+Criterios de Aceptacion Adicionales (Sprint 2)
+US10/US11: Al finalizar una compra exitosa (tarjeta o transferencia), la pantalla de confirmacion debe ofrecer un boton visible de "Comprar otro boleto" que redirige al flujo de busqueda de rutas sin perder la sesion del usuario.
+US17: La PWA del chofer/ayudante debe incluir un indicador visual permanente del estado GPS: icono verde cuando la geolocalizacion esta activa y transmitiendo, icono rojo cuando no hay senal o el permiso fue denegado.
+
+Ceremony: Sprint Planning (4 May, 30 min) — Tomas Solis facilita
+Confirmar las 11 historias y sus responsables.
+Orden de desarrollo: pagos primero (US10-US14), luego QR (US15-US16), luego GPS (US17-US18), luego reportes (US19-US20).
+Alerta de riesgo: 62 SP en 7 dias. Si al dia 5 (8 May) quedan mas de 2 historias sin empezar, Tomas Solis escala al PO para negociar scope.
+
+Ceremonia: Sprint Review (10 May, 20 min)
+Demo flujo completo de compra: tarjeta (Duo B), transferencia+aprobacion (Andrew), efectivo oficina (Duo B), efectivo bus (David).
+Demo QR: generacion de boleto (Andrew) + escaneo y validacion (Duo C).
+Demo GPS: transmision chofer + alerta pasajero (Duo A + Duo C).
+Demo reporte de liquidacion mensual descargable (Andrew).
+
+11. Sprint 3: Afinamiento, Despliegue y Entrega
+Fechas: 11 Mayo -> 12 Mayo 2026   |   17 Story Points   |   7 personas activas
+
+Meta del Sprint: Sistema autenticado, emails funcionando, app configurable, historial de compras accesible, 0 bugs criticos y desplegado en produccion con URL publica.
+
+
+Distribucion de los 2 dias
+11 May: Allen (US21 auth), Gabriela (US22 config visual), Sebastian (US23 emails). Juan inicia E2E tests.
+12 May: Juan (US24 pruebas integrales + fix bugs), Sebastian (US25 despliegue produccion + smoke test). Todo el equipo disponible para bugs de ultimo momento.
+
+Criterios de Aceptacion Adicionales (Sprint 3)
+US21: El perfil del usuario autenticado debe incluir una pantalla de "Historial de Compras" que liste todos los boletos adquiridos (vigentes, utilizados, expirados, anulados) con opcion de descargar el boleto QR en PDF en cualquier momento.
+US23: Incluir notificacion de recordatorio de viaje por correo electronico enviada al pasajero con anticipacion configurable antes de la hora de salida (funcionalidad opcional, implementar si el tiempo lo permite).
+
+Retrospectiva Final (12 May, 15 min)
+Reflexion sobre todo el proyecto y los 3 duos XP.
+Documentar lecciones aprendidas de Scrum+XP con 7 personas.
+
+12. Buffer Final: Afinamiento de Detalles (13-15 Mayo)
+Estos 3 dias NO son para desarrollar funcionalidades nuevas. Distribucion sugerida del equipo:
+
+Allen + Sebastian: optimizacion de rendimiento, seguridad final en auth-api y revision de logs de produccion.
+Allen + Gabriela (Duo A): polish de UI/UX en frontend-web. Revisar cada pantalla en movil y escritorio.
+Andrew: documentacion de la API (endpoints, parametros, ejemplos de respuesta).
+Juan + David (Duo C): pruebas de usuario externas, toma de nota de fricciones, ajustes en PWA.
+Todo el equipo: ensayo de la demo final. Practicar el recorrido completo del sistema ante el docente/evaluador.
+
+Regla de oro del buffer: si el Sprint 3 termina a tiempo el 12 de mayo, estos dias son de afinamiento. Si hay retraso, se usan para terminar historias pendientes. El deadline del 15 de mayo es inamovible.
+
+13. Ceremonias y Cadencia
+
+
+14. Definition of Done (DoD)
+Una historia se considera COMPLETADA solo cuando cumple TODOS los siguientes criterios:
+
+
+15. Gestion de Riesgos
+
+Riesgo 1: Integracion de pasarela de pagos mas lenta de lo esperado
+Probabilidad: Media. Impacto: Alto. Responsable: Duo B (Sebastian+Andrew).
+Mitigacion: Usar modo sandbox de Stripe/PayPhone desde el Sprint 0. Si falla la integracion real, dejar pago con tarjeta en modo simulado para la entrega y documentarlo.
+
+Riesgo 2: GPS sin precision suficiente en el navegador
+Probabilidad: Media. Impacto: Medio. Responsable: Duo A (Allen+Gabriela).
+Mitigacion: Probar la API de Geolocation en dispositivos reales desde el inicio de US17. Si la precision es baja, ampliar el radio de alerta en configuracion (US22).
+
+Riesgo 3: Sprint 2 sobrecargado (62 SP en 7 dias)
+Probabilidad: Alta. Impacto: Alto. Responsable: Tomas Solis (Scrum Master).
+Mitigacion: Maximizar pair programming en las historias de 8 SP. Si al dia 5 (8 May) hay mas de 2 historias sin empezar, Tomas Solis escala al PO y negocia simplificacion del scope de GPS (solo alerta al chofer, sin push al pasajero).
+
+Riesgo 4: Problemas de despliegue en produccion
+Probabilidad: Baja. Impacto: Alto. Responsable: Sebastian (DevOps).
+Mitigacion: Sebastian configura staging desde el Sprint 0 y despliega al final de cada sprint. El Sprint 3 no debe ser la primera vez que se despliega.
+
+Riesgo 5: Deuda tecnica acumulada
+Probabilidad: Media. Impacto: Medio. Responsable: Allen (Tech Lead).
+Mitigacion: Refactoring continuo (XP) al final de cada dia. Allen rechaza PRs con deuda tecnica obvia. Juan valida que los schemas Prisma no acumulen inconsistencias.
+
+16. Herramientas del Proyecto
+Control de versiones: Git + GitHub. Ramas: main, staging, develop, feature/US-XX.
+Monorepo: TurboRepo con paquetes auth-api, bus-api, ticket-api, frontend-web, frontend-pwa, packages/database.
+CI/CD: GitHub Actions (lint + test + build por paquete) + Vercel/Railway (deploy automatico a staging).
+Tablero Kanban: GitHub Projects o Trello. Columnas: Backlog / En progreso / En revision / Hecho.
+Comunicacion: WhatsApp/Discord para daily async + Google Meet para ceremonias.
+Testing: Jest + React Testing Library. Juan lidera los tests de integracion y E2E.
+Estimacion: Planning Poker (escala Fibonacci: 1, 3, 5, 8, 13). Tomas Solis facilita.
+Documentacion: README en GitHub (Allen) + API docs (Andrew en buffer final).
+
+
+Resumen ejecutivo del plan
+7 personas  |  3 duos XP  |  3 sprints activos  |  25 historias  |  123 Story Points
+Sprint 0 (26 Abr): Allen en solitario — Sprint 1 arranca con el equipo completo el 27 Abr
+Cierre objetivo: 12 May 2026   |   Buffer: 13-15 May   |   Deadline: 15 May 2026
+Planificacion generada automaticamente | Version 2.0 | Abril 2026

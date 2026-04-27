@@ -1,0 +1,366 @@
+PLAN DE DESARROLLO UNIFICADO
+Plataforma de Gestion y Venta de Pasajes
+Transporte Interprovincial en Ecuador
+
+Universidad Tecnica de Ambato
+Facultad de Ingenieria en Sistemas, Electronica e Industrial
+Carrera de Software  |  Version 3.0  |  2025
+
+1. Objetivo General
+Desarrollar una aplicacion web completa para la gestion y venta de pasajes de transporte interprovincial en Ecuador, dirigida a cooperativas de transporte, su personal y usuarios finales. El sistema contempla: consulta de rutas y frecuencias, compra de boletos con precios diferenciados por tipo de pasajero, validacion de descuentos por cedula, prevencion de fraude, cuatro metodos de pago con flujos independientes, verificacion de boletos QR de un solo uso, sistema de alertas GPS en tiempo real y reportes de liquidacion para cooperativas.
+
+2. Tecnologias Propuestas
+Framework: Next.js (React) con TypeScript
+Base de Datos: PostgreSQL
+ORM: Prisma
+Estilos: Tailwind CSS o Material-UI
+Generacion de QR: libreria qrcode
+Pasarela de pagos: Stripe o PayPhone (para tarjeta)
+GPS / Geolocation: API de Geolocation del navegador + formula Haversine en backend
+Notificaciones Push: Web Push API (service worker en PWA)
+Notificaciones Email: Nodemailer / servicio SMTP
+Despliegue: Vercel / Railway u otro servicio cloud
+
+3. Roles de Usuario
+El sistema implementa cinco roles diferenciados:
+
+
+4. Reglas del Negocio
+4.1 Cooperativas y Frecuencias
+Existen multiples cooperativas de transporte interprovincial (ej: Amazonas, Santa, Ambato, Flota Pelileo, etc.).
+La ANT asigna frecuencias a cada cooperativa, validadas con resolucion oficial. Cada frecuencia consta de: ciudad origen, ciudad destino y hora (ej: Ambato-Quito 14:00).
+Las frecuencias pueden estar activas o inactivas. Solo las activas entran en la hoja de ruta.
+Una frecuencia puede tener multiples paradas intermedias (ej: Quito-Loja pasa por Latacunga, Riobamba, Cuenca). Cada parada tiene coordenadas GPS registradas.
+Se debe permitir la compra de boletos entre paradas intermedias (ej: Latacunga a Cuenca en la ruta Quito-Loja).
+
+4.2 Hoja de Ruta
+La cooperativa decide que frecuencias habilitadas usa en su hoja de ruta.
+La cantidad de frecuencias debe guardar relacion con el numero de buses disponibles.
+Un exceso de buses sobre frecuencias genera dias de parada para ciertos vehiculos.
+La hoja de ruta puede generarse de forma manual o automatica por el sistema.
+
+4.3 Buses y Asientos
+Cada bus tiene configuracion propia de asientos definida por la cooperativa (Normal, VIP, etc.).
+Al vender un boleto se verifica disponibilidad por tipo y cantidad de asientos en el bus asignado.
+El usuario selecciona su asiento especifico en el mapa visual de disponibilidad.
+
+4.4 Descuentos y Anti-Fraude
+Descuento del 50%: menores de edad, personas con discapacidad y adultos mayores.
+El descuento se valida por cedula consultando el servicio INEC (o simulacion).
+Una cedula no puede adquirir mas de un boleto con descuento en 24 horas (control anti-fraude en tabla RegistroDescuento).
+Adultos sin condicion especial pagan precio completo (100%).
+
+4.5 Boleto y Ciclo de Vida
+Cada boleto tiene un qr_identificador_unico generado al confirmar la compra.
+Es valido para una ruta y fecha especificas, pero para un unico viaje.
+Estados del boleto: VIGENTE, UTILIZADO, EXPIRADO, ANULADO.
+ANULADO se aplica cuando el oficinista rechaza un comprobante de transferencia.
+El boleto es accesible y descargable en cualquier momento desde el historial del usuario.
+
+4.6 Metodos de Pago
+El sistema implementa cuatro metodos de pago con flujos completamente diferenciados:
+
+
+PAGO_TARJETA: nunca se guarda el numero completo de la tarjeta; solo los ultimos 4 digitos y la referencia de la pasarela (Stripe, PayPhone, etc.).
+PAGO_TRANSFERENCIA: guarda el banco, la referencia y la URL del comprobante subido por el pasajero. El oficinista puede aprobar o rechazar indicando un motivo de rechazo.
+PAGO_EFECTIVO: solo puede ser creado por el chofer/ayudante (canal BUS) o el oficinista (canal OFICINA). Registra quien cobro, cuanto recibio, el cambio dado y el turno al que pertenece para que quede incluido en la liquidacion.
+
+4.7 Sistema de Alertas GPS
+El dispositivo GPS del bus (telefono del chofer/ayudante) transmite su ubicacion en tiempo real.
+El sistema calcula la distancia entre el bus y cada parada pendiente del viaje usando la formula Haversine.
+Cuando el bus entra en el radio de alerta configurado (ej: 500 metros) de una parada, se disparan simultaneamente dos tipos de alerta:
+Alerta al Pasajero: notificacion push/in-app avisando que su parada de destino esta proxima.
+Alerta al Chofer/Ayudante: listado en pantalla de todos los pasajeros que descienden en esa parada, mostrando numero de asiento, nombre completo y total de pasajeros.
+Cada alerta se emite una sola vez por parada por viaje para no repetirse.
+El radio de alerta es configurable desde el panel de administracion.
+
+5. Diseno de Base de Datos
+Entidades principales del sistema (campos clave por entidad):
+
+
+6. Modulos del Sistema
+6.1 Modulo de Administracion de Plataforma
+CRUD de cooperativas (nombre, RUC, logo, cuenta bancaria, contacto).
+Asignacion y gestion de buses a cooperativas.
+Configuracion visual de la aplicacion: logo, colores, redes sociales, soporte, radio de alerta GPS.
+Gestion de usuarios y roles.
+Acceso al panel de reportes y liquidaciones.
+
+6.2 Modulo de Cooperativa
+Gestion de buses propios y configuracion de asientos por tipo (Normal, VIP, etc.).
+Gestion de frecuencias ANT asignadas: activar/desactivar.
+Configuracion de paradas intermedias con coordenadas GPS.
+Generacion de hoja de ruta (manual o automatica) y gestion de dias de parada.
+
+6.3 Modulo de Oficinista
+Venta presencial de boletos con mapa de asientos y validacion de descuentos.
+Cobro en efectivo con registro de monto recibido, cambio y turno (canal_venta: OFICINA).
+Revision y validacion de comprobantes de transferencia: aprobar (VIGENTE) o rechazar con motivo (ANULADO).
+Generacion e impresion de boletos.
+
+6.4 Modulo de Usuario Final (Cliente)
+Registro e inicio de sesion.
+Busqueda de rutas con filtros: cooperativa, tipo de asiento, marca chasis/carroceria, tipo viaje (directo/paradas).
+Visualizacion detallada del bus: cooperativa, numero, placa, chasis, carroceria, fotografia, asientos disponibles.
+Seleccion de asiento especifico en mapa visual.
+Compra con descuento validado por cedula (anti-fraude 24h).
+Seleccion del metodo de pago: tarjeta (automatico), transferencia (sube comprobante), efectivo solo en taquilla.
+Generacion y descarga del boleto QR en cualquier momento desde el historial.
+Al finalizar la compra, opcion de adquirir otro boleto directamente.
+Alertas GPS en la app cuando el bus se aproxima a su parada de destino.
+Notificaciones por correo electronico en cada paso relevante.
+
+6.5 Modulo de Personal del Bus (Chofer / Ayudante)
+PWA optimizada para moviles.
+Login seguro con rol Personal de Bus.
+Escaneo de QR para validacion de acceso: VALIDO (verde) o INVALIDO (rojo) con detalle del error.
+Cobro de boletos en efectivo desde el bus: registra cedula, asiento, monto recibido y cambio dado (canal_venta: BUS).
+Panel GPS de viaje activo: transmision de ubicacion cada 10-15 segundos.
+Alerta de parada proxima: cuando el bus se acerca a una parada, aparece listado de pasajeros que descienden (nombre, asiento, total).
+Indicador visual del estado GPS: activo (verde) / sin senal (rojo).
+
+6.6 Modulo de Reportes y Liquidaciones
+Panel protegido para administradores con filtros por rango de fechas y cooperativa.
+Reporte de boletos utilizados agrupado por tipo de descuento, canal de venta, bus y cooperativa.
+Desglose de ingresos por metodo de pago (tarjeta, transferencia, efectivo bus, efectivo oficina).
+Calculo mensual del monto a liquidar a cada cooperativa segun boletos escaneados y canal de venta.
+Reporte detallado por cooperativa: nombre, buses, boletos por tipo, monto total, cuenta bancaria.
+Exportacion del reporte a PDF o Excel.
+
+7. Plan de Desarrollo por Fases
+El proyecto se divide en 9 fases de desarrollo iterativo:
+
+
+Fase 0: Configuracion y Arquitectura Base
+7.0.1 Inicializacion
+Configurar proyecto Next.js con TypeScript.
+Instalar dependencias: Prisma, Tailwind CSS / Material-UI, qrcode, Nodemailer, Stripe/PayPhone SDK.
+Configurar variables de entorno y estructura de carpetas.
+
+7.0.2 Diseno de Base de Datos
+Definir esquema Prisma completo con todas las entidades de la seccion 5.
+Incluir tablas PagoTarjeta, PagoTransferencia, PagoEfectivo, UbicacionBus, AlertaParada.
+Crear migraciones iniciales y poblar datos de prueba.
+
+7.0.3 Autenticacion y Roles
+Implementar sistema de autenticacion (NextAuth o JWT).
+Configurar los cinco roles con middleware de proteccion de rutas.
+
+Fase 1: Gestion de Cooperativas y Flota
+7.1.1 Backend
+CRUD de Cooperativas con info de cuenta bancaria.
+CRUD de Buses con configuracion de tipos de asiento.
+CRUD de Frecuencias ANT con resolucion oficial y estado activo/inactivo.
+CRUD de Paradas Intermedias con coordenadas GPS (latitud, longitud).
+
+7.1.2 Frontend
+Panel de cooperativa para gestionar buses, frecuencias y paradas intermedias.
+Mapa de previsualización de paradas con coordenadas.
+
+Fase 2: Hoja de Ruta
+7.2.1 Backend
+Generacion automatica de hoja de ruta segun frecuencias activas y buses disponibles.
+Logica de dias de parada cuando buses superan frecuencias.
+Endpoint de edicion manual de la hoja de ruta.
+
+7.2.2 Frontend
+Vista de calendario o tabla con hoja de ruta, indicadores de dias de parada.
+Boton de generacion automatica con edicion posterior.
+
+Fase 3: Consulta de Rutas
+7.3.1 Backend
+Endpoint de busqueda con filtros: origen, destino, fecha, cooperativa, tipo asiento, tipo viaje.
+Soporte para busqueda entre paradas intermedias.
+Endpoint de detalle de bus/frecuencia con asientos disponibles.
+
+7.3.2 Frontend
+Pagina principal con selector de origen/destino incluyendo paradas intermedias.
+Panel de filtros avanzados: cooperativa, tipo asiento, marca chasis/carroceria, directo/con paradas.
+Listado de resultados con datos de cooperativa, bus y horario.
+Vista de detalle del bus con foto, placa, chasis, carroceria y tipos de asiento.
+
+Fase 4: Proceso de Compra y Pagos
+7.4.1 Servicio INEC (Simulacion)
+Servicio mock que recibe cedula y devuelve: adulto, adulto_mayor, nino, discapacitado.
+
+7.4.2 Backend - Logica de Compra Anti-Fraude
+Endpoint POST /api/comprar-boleto:
+Recibir: cedula, frecuencia/bus, parada origen, parada destino, asiento, metodo_pago.
+Consultar INEC para tipo de persona.
+Verificar RegistroDescuento: rechazar si hay descuento en las ultimas 24 horas.
+Calcular precio: 50% (nino/adulto_mayor/discapacitado) o 100% (adulto).
+Verificar disponibilidad del asiento.
+Segun metodo_pago, ejecutar flujo correspondiente (ver 7.4.3).
+Si el boleto queda VIGENTE, actualizar RegistroDescuento.
+Devolver confirmacion con datos del boleto.
+
+7.4.3 Flujos de Pago
+Tarjeta de credito/debito:
+Integrar pasarela Stripe o PayPhone.
+La pasarela confirma el pago automaticamente y crea el boleto en estado VIGENTE.
+Registrar en PagoTarjeta: pasarela, referencia y ultimos 4 digitos (nunca el numero completo).
+
+Transferencia bancaria:
+El pasajero sube el comprobante de transferencia (imagen/PDF).
+Se crea PagoTransferencia en estado PENDIENTE; el boleto queda en estado pendiente de aprobacion.
+El oficinista revisa el comprobante en su panel.
+Si aprueba: se crea el registro de aprobacion, el boleto pasa a VIGENTE y se notifica al cliente.
+Si rechaza: el oficinista ingresa el motivo, el boleto pasa a ANULADO y se notifica al cliente con el motivo.
+
+Efectivo en Bus (canal_venta: BUS):
+Solo accesible desde la PWA del chofer/ayudante.
+El chofer/ayudante ingresa la cedula del pasajero, selecciona el asiento y el monto recibido.
+El sistema calcula automaticamente el cambio a devolver.
+Se crea PagoEfectivo con canal_venta BUS, cobrado_por_usuario_id y turno_id.
+El boleto se crea directamente en estado VIGENTE.
+
+Efectivo en Oficina (canal_venta: OFICINA):
+Accesible desde el panel de oficinista.
+Mismo flujo que en bus: cedula, asiento, monto recibido, cambio automatico.
+Se crea PagoEfectivo con canal_venta OFICINA, cobrado_por_usuario_id y turno_id.
+El boleto se crea directamente en estado VIGENTE.
+
+7.4.4 Frontend - Flujo de Compra Online
+Mapa visual de asientos del bus con disponibilidad en tiempo real.
+Ingreso de cedula con validacion automatica y calculo de precio.
+Seleccion del metodo de pago con UI especifica para cada metodo.
+Pantalla de confirmacion con descarga del boleto o compra de otro.
+Notificacion por correo al confirmar la compra.
+
+7.4.5 Panel de Oficinista - Validacion de Transferencias
+Lista de comprobantes pendientes de revision.
+Vista del comprobante adjunto con opciones: Aprobar o Rechazar.
+Campo obligatorio de motivo al rechazar.
+Notificacion automatica al cliente segun la decision.
+
+Fase 5: Boleto QR y Verificacion
+7.5.1 Generacion del Boleto
+Generar UUID unico como qr_identificador_unico al confirmar la compra.
+Renderizar boleto con: datos del pasajero, ruta, paradas, asiento, tipo descuento, metodo pago y QR.
+Descarga en PDF disponible desde cualquier pantalla del historial.
+
+7.5.2 App de Verificacion (PWA - Personal del Bus)
+PWA optimizada para moviles con login de rol Personal de Bus.
+Escaneo de camara del QR del boleto.
+Envio de qr_identificador_unico y bus_id al endpoint de verificacion.
+Resultado visual: VALIDO (verde) o INVALIDO (rojo) con detalle del error.
+
+7.5.3 Backend - API de Verificacion
+Endpoint POST /api/verificar-boleto:
+Recibe: qr_identificador_unico, bus_id.
+Si no existe: responde FALSO.
+Si estado UTILIZADO o EXPIRADO: devuelve error especifico.
+Si VIGENTE: cambia a UTILIZADO, registra fecha_escaneo y bus_id_usado. Devuelve exito.
+
+Fase 5B: Sistema de Alertas GPS
+Este modulo implementa seguimiento GPS en tiempo real del bus durante el viaje. Genera alertas automaticas cuando el bus se aproxima a una parada: al pasajero para que se prepare para descender, y al chofer/ayudante con el listado de quienes bajan en esa parada.
+
+7.5B.1 Backend - API de GPS y Alertas
+Endpoint POST /api/gps/ubicacion: recibe latitud, longitud y hoja_ruta_id del dispositivo del chofer y almacena en UbicacionBus.
+Servicio de calculo de proximidad: al recibir cada ubicacion, calcula distancia a todas las paradas pendientes del viaje usando la formula Haversine.
+Si la distancia a una parada es menor al radio configurado Y no se ha alertado antes en ese viaje:
+Consultar boletos VIGENTES cuya parada_destino_id coincide con la parada proxima.
+Generar AlertaParada tipo CHOFER: lista de pasajeros (nombre, asiento, cedula, total).
+Generar AlertaParada tipo PASAJERO para cada boleto afectado.
+Marcar la parada como alertada en ese viaje para no repetir.
+Endpoint GET /api/gps/pasajeros-parada: recibe hoja_ruta_id y parada_id, devuelve lista de pasajeros que descienden.
+Endpoint GET /api/gps/alertas-pasajero: el usuario consulta alertas pendientes de su viaje activo.
+
+7.5B.2 Frontend - PWA del Chofer/Ayudante (extension)
+Pantalla de viaje activo con paradas pendientes.
+Transmision GPS automatica cada 10-15 segundos usando la API de Geolocation del navegador.
+Panel de alerta de parada proxima: notificacion prominente que muestra:
+Nombre de la parada proxima.
+Numero total de pasajeros que descienden.
+Lista: numero de asiento + nombre completo del pasajero.
+La lista permanece visible hasta que el bus supere la parada.
+Indicador visual del estado GPS: activo (verde) / sin senal (rojo).
+
+7.5B.3 Frontend - App del Pasajero (extension)
+En la pantalla del boleto activo, indicador del estado del viaje en tiempo real.
+Cuando el bus se aproxima a su parada de destino, alerta visible en la app:
+Mensaje: 'Tu parada esta proxima. Preparate para descender.'
+Nombre de la parada de destino.
+Distancia o tiempo estimado restante (si disponible).
+Notificacion push adicional si el usuario dio permisos (funciona con la app en segundo plano).
+El pasajero puede marcar la alerta como leida.
+
+Fase 6: Reportes y Liquidaciones
+7.6.1 Backend
+Endpoint GET /api/reportes con filtros por fechas, cooperativa, bus y canal de venta.
+Agrupacion por tipo_descuento, canal_venta, bus_id_usado y cooperativa.
+Desglose de ingresos por metodo de pago.
+Endpoint de liquidacion mensual por cooperativa.
+
+7.6.2 Frontend
+Panel de administracion protegido con selector de mes/ano y cooperativa.
+Resumen con tablas, totales por tipo de pasajero y por canal de venta.
+Reporte de liquidacion con datos de cuenta bancaria de la cooperativa.
+Exportacion a PDF o Excel.
+
+Fase 7: Autenticacion y Configuracion de la App
+7.7.1 Autenticacion
+Registro e inicio de sesion de usuarios cliente.
+Perfil con historial de boletos y descarga en cualquier momento.
+
+7.7.2 Configuracion Visual
+Panel para personalizar: logo, colores, redes sociales, soporte.
+Campo de radio_alerta_metros para el sistema GPS.
+Cambios aplicados dinamicamente en toda la interfaz.
+
+Fase 8: Notificaciones, UX Final y Despliegue
+7.8.1 Notificaciones por Correo
+Confirmacion de compra de boleto.
+Aprobacion o rechazo de comprobante de transferencia (con motivo si aplica).
+Recordatorio de viaje (opcional).
+
+7.8.2 Pruebas
+Flujo completo de compra con los 4 metodos de pago.
+Flujo de descuentos y anti-fraude.
+Verificacion de QR y estados del boleto.
+Alertas GPS en distintos escenarios (bus en movimiento, sin senal, parada multiple).
+Generacion de reportes y liquidaciones.
+Responsividad en diferentes dispositivos.
+
+7.8.3 Despliegue
+Despliegue en servicio de hosting (Vercel, Railway u otro).
+Configuracion de dominio, variables de entorno de produccion y base de datos.
+Optimizacion de rendimiento y revision final de UX/UI.
+
+8. Resumen de Funcionalidades por Modulo
+
+Modulo de Usuario Final
+Registro e inicio de sesion
+Busqueda de rutas con filtros avanzados
+Visualizacion detallada del bus
+Seleccion de asiento especifico
+4 metodos de pago: tarjeta (automatico), transferencia (con comprobante), efectivo en taquilla
+Descarga y visualizacion del boleto QR en cualquier momento
+Alertas GPS cuando el bus se aproxima a su parada de destino
+Historial de compras y notificaciones por correo
+
+Modulo de Cooperativa
+CRUD de buses con configuracion de asientos
+Gestion de frecuencias ANT y paradas intermedias con coordenadas GPS
+Generacion y edicion de hoja de ruta y dias de parada
+
+Modulo de Oficinista
+Venta presencial de boletos
+Cobro en efectivo (canal OFICINA) con registro de monto y cambio
+Validacion de comprobantes de transferencia: aprobar o rechazar con motivo
+
+Modulo de Personal del Bus
+PWA para escaneo QR de acceso
+Cobro de boletos en efectivo en el bus (canal BUS) con registro de turno
+Panel GPS: transmision de ubicacion y alerta de pasajeros por parada proxima
+Lista de pasajeros por parada: asiento, nombre y total
+
+Modulo de Administracion
+CRUD de cooperativas, buses, frecuencias
+Configuracion visual de la app y radio de alerta GPS
+Gestion de usuarios y roles
+Reportes, desglose por canal de venta y metodo de pago
+Liquidaciones mensuales a cooperativas
+
+
+Documento generado automaticamente | Version 3.0 | 2025
