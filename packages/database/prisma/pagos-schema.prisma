@@ -1,0 +1,103 @@
+// ============================================
+// PAGOS SERVICE - schema.prisma
+// Microservicio de liquidaciones y pagos
+// a cooperativas por viajes realizados
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/pagos"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PAGOS_DATABASE_URL")
+}
+
+// Registro de ingresos por cada viaje/turno completado
+model IngresoViaje {
+  id              Int          @id @default(autoincrement())
+  turnoId         Int          @unique @map("turno_id")
+  busId           Int          @map("bus_id")
+  cooperativaId   Int          @map("cooperativa_id")
+  duenoId         Int          @map("dueno_id")
+  rutaNombre      String       @map("ruta_nombre")
+  fecha           DateTime     @db.Date
+  totalPasajeros  Int          @map("total_pasajeros")
+  ingresoTarjeta  Decimal      @default(0) @map("ingreso_tarjeta") @db.Decimal(12, 2)
+  ingresoTransferencia Decimal @default(0) @map("ingreso_transferencia") @db.Decimal(12, 2)
+  ingresoEfectivoBus   Decimal @default(0) @map("ingreso_efectivo_bus") @db.Decimal(12, 2)
+  ingresoEfectivoOficina Decimal @default(0) @map("ingreso_efectivo_oficina") @db.Decimal(12, 2)
+  ingresoTotal    Decimal      @map("ingreso_total") @db.Decimal(12, 2)
+  registradoEn    DateTime     @default(now()) @map("registrado_en")
+
+  @@index([cooperativaId, fecha])
+  @@index([duenoId, fecha])
+  @@map("ingresos_viaje")
+}
+
+// Liquidacion mensual por cooperativa
+model Liquidacion {
+  id                  Int              @id @default(autoincrement())
+  cooperativaId       Int              @map("cooperativa_id")
+  periodoInicio       DateTime         @map("periodo_inicio") @db.Date
+  periodoFin          DateTime         @map("periodo_fin") @db.Date
+  totalBoletos        Int              @map("total_boletos")
+  totalRecaudado      Decimal          @map("total_recaudado") @db.Decimal(12, 2)
+  comisionPlataforma  Decimal          @map("comision_plataforma") @db.Decimal(12, 2)
+  netoAPagar          Decimal          @map("neto_a_pagar") @db.Decimal(12, 2)
+  estado              EstadoLiquidacion @default(GENERADA)
+  generadoEn          DateTime         @default(now()) @map("generado_en")
+
+  detalles LiquidacionDetalle[]
+
+  @@map("liquidaciones")
+}
+
+// Detalle de liquidacion desglosado por bus/dueno
+model LiquidacionDetalle {
+  id              Int     @id @default(autoincrement())
+  liquidacionId   Int     @map("liquidacion_id")
+  duenoId         Int     @map("dueno_id")
+  busId           Int     @map("bus_id")
+  totalViajes     Int     @map("total_viajes")
+  totalBoletos    Int     @map("total_boletos")
+  montoRecaudado  Decimal @map("monto_recaudado") @db.Decimal(12, 2)
+  comision        Decimal @db.Decimal(12, 2)
+  netoAPagar      Decimal @map("neto_a_pagar") @db.Decimal(12, 2)
+
+  liquidacion Liquidacion @relation(fields: [liquidacionId], references: [id])
+
+  @@map("liquidacion_detalles")
+}
+
+// Registro de pagos realizados a cooperativas/duenos
+model PagoCooperativa {
+  id              Int                @id @default(autoincrement())
+  liquidacionId   Int?               @map("liquidacion_id")
+  cooperativaId   Int                @map("cooperativa_id")
+  duenoId         Int?               @map("dueno_id")
+  monto           Decimal            @db.Decimal(12, 2)
+  referencia      String?
+  banco           String?
+  cuentaDestino   String?            @map("cuenta_destino")
+  estado          EstadoPagoCooperativa @default(PENDIENTE)
+  pagadoEn        DateTime?          @map("pagado_en")
+  registradoEn    DateTime           @default(now()) @map("registrado_en")
+
+  @@map("pagos_cooperativa")
+}
+
+// ENUMS
+
+enum EstadoLiquidacion {
+  GENERADA
+  PAGADA
+}
+
+enum EstadoPagoCooperativa {
+  PENDIENTE
+  PROCESADO
+  COMPLETADO
+  FALLIDO
+}
