@@ -1,5 +1,7 @@
 // ============================================
 // BUS SERVICE - schema.prisma
+// Base: repo original + campos requeridos por
+// US01, US02, US03, US17, US22
 // ============================================
 
 generator client {
@@ -25,6 +27,8 @@ model Dueno {
   @@map("duenos")
 }
 
+// Original: id, nombre, ruc, estado
+// Agregado (US01): logoUrl, cuentaBancaria, banco, telefono, email
 model Cooperativa {
   id             Int           @id @default(autoincrement())
   nombre         String
@@ -41,6 +45,8 @@ model Cooperativa {
   @@map("cooperativas")
 }
 
+// Original: sin numeroDisco ni fotoUrl
+// Agregado (US02): numeroDisco, fotoUrl
 model Bus {
   id           Int          @id @default(autoincrement())
   cooperativaId Int         @map("cooperativa_id")
@@ -108,6 +114,8 @@ model Parada {
   @@map("paradas")
 }
 
+// Original: sin resolucionAnt ni estado
+// Agregado (US03): resolucionAnt, estado
 model Frecuencia {
   id             Int           @id @default(autoincrement())
   rutaId         Int           @map("ruta_id")
@@ -174,9 +182,10 @@ model AsientoTurno {
 }
 
 // ============================================
-// NUEVAS ENTIDADES
+// NUEVAS ENTIDADES (no estaban en repo original)
 // ============================================
 
+// Agregado (US17): Tracking GPS en tiempo real
 model UbicacionBus {
   id           Int      @id @default(autoincrement())
   turnoId      Int      @map("turno_id")
@@ -190,6 +199,7 @@ model UbicacionBus {
   @@map("ubicaciones_bus")
 }
 
+// Agregado (US22): Configuracion visual de la plataforma
 model ConfiguracionApp {
   id            Int      @id @default(autoincrement())
   clave         String   @unique
@@ -245,6 +255,7 @@ enum DiaSemana {
   DOM
 }
 
+// Agregado (US22)
 enum TipoConfiguracion {
   TEXTO
   NUMERO
