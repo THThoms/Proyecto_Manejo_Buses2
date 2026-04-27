@@ -4,7 +4,7 @@
 CREATE DATABASE auth_db;
 CREATE DATABASE bus_db;
 CREATE DATABASE ticket_db;
-CREATE DATABASE ms_pagos; -- Creada para futuro uso
+CREATE DATABASE ms_pagos;
 
 -- =======================================================
 -- 2. MICROSERVICIO: AUTH & USUARIOS (auth_db)
@@ -74,11 +74,17 @@ CREATE TYPE EstadoTurno AS ENUM ('PENDIENTE', 'EN_RUTA', 'COMPLETADO', 'CANCELAD
 CREATE TYPE TipoAsiento AS ENUM ('NORMAL', 'VIP', 'DISCAPACIDAD');
 CREATE TYPE EstadoAsientoTurno AS ENUM ('DISPONIBLE', 'RESERVADO', 'OCUPADO', 'VACIO');
 CREATE TYPE DiaSemana AS ENUM ('LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB', 'DOM');
+CREATE TYPE TipoConfiguracion AS ENUM ('TEXTO', 'NUMERO', 'COLOR', 'URL');
 
 CREATE TABLE cooperativas (
     id SERIAL PRIMARY KEY,
     nombre TEXT NOT NULL,
     ruc TEXT UNIQUE NOT NULL,
+    logo_url TEXT,
+    cuenta_bancaria TEXT,
+    banco TEXT,
+    telefono TEXT,
+    email TEXT,
     estado EstadoGeneral DEFAULT 'ACTIVO'
 );
 
@@ -96,6 +102,7 @@ CREATE TABLE buses (
     id SERIAL PRIMARY KEY,
     cooperativa_id INTEGER NOT NULL REFERENCES cooperativas(id) ON DELETE RESTRICT ON UPDATE CASCADE,
     dueno_id INTEGER NOT NULL REFERENCES duenos(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    numero_disco INTEGER,
     placa TEXT UNIQUE NOT NULL,
     marca TEXT NOT NULL,
     carroceria TEXT NOT NULL,
@@ -103,6 +110,7 @@ CREATE TABLE buses (
     anio INTEGER NOT NULL,
     capacidad INTEGER NOT NULL,
     color TEXT,
+    foto_url TEXT,
     estado EstadoBus DEFAULT 'ACTIVO'
 );
 
@@ -141,7 +149,9 @@ CREATE TABLE frecuencias (
     bus_id INTEGER NOT NULL REFERENCES buses(id) ON DELETE RESTRICT ON UPDATE CASCADE,
     dia_semana DiaSemana NOT NULL,
     hora_salida TEXT NOT NULL,
-    hora_llegada TEXT NOT NULL
+    hora_llegada TEXT NOT NULL,
+    resolucion_ant TEXT,
+    estado EstadoGeneral DEFAULT 'ACTIVO'
 );
 
 CREATE TABLE turnos (
@@ -174,6 +184,36 @@ CREATE TABLE asiento_turnos (
     UNIQUE(turno_id, asiento_id)
 );
 
+-- Tracking GPS en tiempo real del bus
+CREATE TABLE ubicaciones_bus (
+    id SERIAL PRIMARY KEY,
+    turno_id INTEGER NOT NULL REFERENCES turnos(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    latitud DECIMAL(10, 8) NOT NULL,
+    longitud DECIMAL(11, 8) NOT NULL,
+    velocidad DECIMAL(5, 2),
+    registrado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Configuración visual de la plataforma
+CREATE TABLE configuracion_app (
+    id SERIAL PRIMARY KEY,
+    clave TEXT UNIQUE NOT NULL,
+    valor TEXT NOT NULL,
+    tipo TipoConfiguracion DEFAULT 'TEXTO',
+    actualizado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Datos iniciales de configuración
+INSERT INTO configuracion_app (clave, valor, tipo) VALUES
+    ('nombre_empresa', 'Sistema de Transporte', 'TEXTO'),
+    ('color_primario', '#1E40AF', 'COLOR'),
+    ('color_secundario', '#3B82F6', 'COLOR'),
+    ('logo_url', '', 'URL'),
+    ('telefono_soporte', '', 'TEXTO'),
+    ('email_soporte', '', 'TEXTO'),
+    ('redes_sociales', '{}', 'TEXTO'),
+    ('radio_alerta_metros', '500', 'NUMERO');
+
 -- =======================================================
 -- 4. MICROSERVICIO: VENTAS & PAGOS (ticket_db)
 -- =======================================================
@@ -189,8 +229,9 @@ CREATE TYPE EstadoAprobacion AS ENUM ('APROBADO', 'RECHAZADO');
 CREATE TYPE CanalEfectivo AS ENUM ('BUS', 'OFICINA');
 CREATE TYPE ResultadoEscaneo AS ENUM ('APROBADO', 'RECHAZADO');
 CREATE TYPE EstadoBoletoParada AS ENUM ('PENDIENTE', 'ALERTADO', 'BAJADO');
-CREATE TYPE EstadoAlerta AS ENUM ('ACTIVA', 'DISPARADA', 'INACTIVA');
 CREATE TYPE TipoTarifa AS ENUM ('NORMAL', 'TERCERA_EDAD', 'DISCAPACIDAD', 'MENOR');
+CREATE TYPE TipoAlerta AS ENUM ('CHOFER', 'PASAJERO');
+CREATE TYPE EstadoAlertaParada AS ENUM ('PENDIENTE', 'ENVIADA', 'LEIDA');
 
 CREATE TABLE compras (
     id SERIAL PRIMARY KEY,
@@ -210,6 +251,9 @@ CREATE TABLE boletos (
     uuid_qr TEXT UNIQUE NOT NULL,
     cedula_pasajero TEXT NOT NULL,
     nombre_pasajero TEXT NOT NULL,
+    asiento_numero INTEGER,
+    asiento_tipo TEXT,
+    ruta_nombre TEXT,
     tipo_tarifa TipoTarifa DEFAULT 'NORMAL',
     estado EstadoBoleto DEFAULT 'PENDIENTE',
     expira_en TIMESTAMP(3) NOT NULL,
@@ -279,13 +323,97 @@ CREATE TABLE boleto_paradas (
     estado EstadoBoletoParada DEFAULT 'PENDIENTE'
 );
 
-CREATE TABLE alertas_gps (
+-- Control anti-fraude: una cédula no puede tener más de un descuento en 24h
+CREATE TABLE registro_descuentos (
     id SERIAL PRIMARY KEY,
-    boleto_parada_id INTEGER NOT NULL REFERENCES boleto_paradas(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    cedula TEXT NOT NULL,
+    boleto_id INTEGER UNIQUE NOT NULL REFERENCES boletos(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    tipo_tarifa TipoTarifa NOT NULL,
+    aplicado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_registro_descuentos_cedula_fecha ON registro_descuentos(cedula, aplicado_en);
+
+-- Alertas diferenciadas: CHOFER (lista de pasajeros) y PASAJERO (notificación individual)
+CREATE TABLE alertas_parada (
+    id SERIAL PRIMARY KEY,
     turno_id INTEGER NOT NULL,
-    lat_actual DECIMAL(10, 8) NOT NULL,
-    lng_actual DECIMAL(11, 8) NOT NULL,
-    metros_restantes INTEGER NOT NULL,
-    estado EstadoAlerta DEFAULT 'ACTIVA',
-    actualizado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    parada_id INTEGER NOT NULL,
+    boleto_parada_id INTEGER REFERENCES boleto_paradas(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    tipo TipoAlerta NOT NULL,
+    estado EstadoAlertaParada DEFAULT 'PENDIENTE',
+    creado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =======================================================
+-- 5. MICROSERVICIO: PAGOS & LIQUIDACIONES (ms_pagos)
+-- Registros de pagos de los viajes de los buses
+-- a la cooperativa a la que pertenezcan
+-- =======================================================
+\c ms_pagos;
+
+CREATE TYPE EstadoLiquidacion AS ENUM ('GENERADA', 'PAGADA');
+CREATE TYPE EstadoPagoCooperativa AS ENUM ('PENDIENTE', 'PROCESADO', 'COMPLETADO', 'FALLIDO');
+
+-- Registro de ingresos por cada viaje/turno completado
+CREATE TABLE ingresos_viaje (
+    id SERIAL PRIMARY KEY,
+    turno_id INTEGER UNIQUE NOT NULL,
+    bus_id INTEGER NOT NULL,
+    cooperativa_id INTEGER NOT NULL,
+    dueno_id INTEGER NOT NULL,
+    ruta_nombre TEXT NOT NULL,
+    fecha DATE NOT NULL,
+    total_pasajeros INTEGER NOT NULL,
+    ingreso_tarjeta DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    ingreso_transferencia DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    ingreso_efectivo_bus DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    ingreso_efectivo_oficina DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    ingreso_total DECIMAL(12, 2) NOT NULL,
+    registrado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_ingresos_viaje_cooperativa ON ingresos_viaje(cooperativa_id, fecha);
+CREATE INDEX idx_ingresos_viaje_dueno ON ingresos_viaje(dueno_id, fecha);
+
+-- Liquidación mensual por cooperativa
+CREATE TABLE liquidaciones (
+    id SERIAL PRIMARY KEY,
+    cooperativa_id INTEGER NOT NULL,
+    periodo_inicio DATE NOT NULL,
+    periodo_fin DATE NOT NULL,
+    total_boletos INTEGER NOT NULL,
+    total_recaudado DECIMAL(12, 2) NOT NULL,
+    comision_plataforma DECIMAL(12, 2) NOT NULL,
+    neto_a_pagar DECIMAL(12, 2) NOT NULL,
+    estado EstadoLiquidacion DEFAULT 'GENERADA',
+    generado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Detalle de liquidación desglosado por bus/dueño
+CREATE TABLE liquidacion_detalles (
+    id SERIAL PRIMARY KEY,
+    liquidacion_id INTEGER NOT NULL REFERENCES liquidaciones(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    dueno_id INTEGER NOT NULL,
+    bus_id INTEGER NOT NULL,
+    total_viajes INTEGER NOT NULL,
+    total_boletos INTEGER NOT NULL,
+    monto_recaudado DECIMAL(12, 2) NOT NULL,
+    comision DECIMAL(12, 2) NOT NULL,
+    neto_a_pagar DECIMAL(12, 2) NOT NULL
+);
+
+-- Registro de pagos realizados a cooperativas/dueños
+CREATE TABLE pagos_cooperativa (
+    id SERIAL PRIMARY KEY,
+    liquidacion_id INTEGER,
+    cooperativa_id INTEGER NOT NULL,
+    dueno_id INTEGER,
+    monto DECIMAL(12, 2) NOT NULL,
+    referencia TEXT,
+    banco TEXT,
+    cuenta_destino TEXT,
+    estado EstadoPagoCooperativa DEFAULT 'PENDIENTE',
+    pagado_en TIMESTAMP(3),
+    registrado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
