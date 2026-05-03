@@ -1,0 +1,70 @@
+.busCard {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  transition: transform var(--transition-fast);
+  min-width: 180px;
+  flex: 1;
+}
+
+.busCard:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+}
+
+.busMainInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.busHeader {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.busIcon {
+  font-size: 1.5rem;
+}
+
+.placa {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.marca {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+}
+
+.capacidadBadge {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-primary);
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-medium);
+  border: 1px solid var(--color-primary-light);
+}
+
+.detailLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin-right: var(--spacing-xs);
+}
+
+.detailValue {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}

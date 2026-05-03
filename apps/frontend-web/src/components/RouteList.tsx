@@ -1,6 +1,7 @@
 'use client';
 
 import styles from './RouteList.module.css';
+import BusCard from './BusCard';
 
 export interface Route {
   id: number;
@@ -21,6 +22,7 @@ export interface Route {
     bus?: {
       placa: string;
       marca: string;
+      capacidad?: number;
     };
   }>;
 }
@@ -165,17 +167,14 @@ export default function RouteList({
                     <p className={styles.turnosLabel}>🚌 Turnos Disponibles:</p>
                     <div className={styles.turnosList}>
                       {route.turnos.slice(0, 3).map((turno) => (
-                        <div key={turno.id} className={styles.turnoBadge}>
-                          <div className={styles.turnoTime}>
-                            {turno.horaInicio}
-                            {turno.horaFin && ` - ${turno.horaFin}`}
-                          </div>
-                          {turno.bus && (
-                            <div className={styles.turnoBus}>
-                              🚐 {turno.bus.placa}
-                            </div>
-                          )}
-                        </div>
+                        turno.bus && (
+                          <BusCard 
+                            key={turno.id}
+                            bus={turno.bus}
+                            horaInicio={turno.horaInicio}
+                            horaFin={turno.horaFin}
+                          />
+                        )
                       ))}
                       {route.turnos.length > 3 && (
                         <span className={styles.moreIndicator}>
