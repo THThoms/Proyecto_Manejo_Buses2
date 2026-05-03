@@ -168,3 +168,58 @@ export const searchRutas = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Error al buscar las rutas' });
   }
 };
+export const getParadaCercana = async (req: Request, res: Response) => {
+  const { lat, lng } = req.query;
+
+  if (!lat || !lng) {
+    return res.status(400).json({ error: 'Latitud y longitud son requeridas' });
+  }
+
+  try {
+    const latNum = parseFloat(String(lat));
+    const lngNum = parseFloat(String(lng));
+
+    // Obtener todas las paradas (y los orígenes/destinos de las rutas)
+    // Para simplificar esta demo, buscaremos solo en la tabla Parada
+    const paradas = await prisma.parada.findMany({
+      include: { ruta: true }
+    });
+
+    if (paradas.length === 0) {
+      return res.status(404).json({ error: 'No se encontraron paradas configuradas' });
+    }
+
+    // Calcular distancia Haversine
+    const calcularDistancia = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const R = 6371; // Radio de la Tierra en km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    };
+
+    let paradaCercana = paradas[0];
+    let distanciaMinima = calcularDistancia(latNum, lngNum, Number(paradas[0].latitud), Number(paradas[0].longitud));
+
+    for (const p of paradas) {
+      const d = calcularDistancia(latNum, lngNum, Number(p.latitud), Number(p.longitud));
+      if (d < distanciaMinima) {
+        distanciaMinima = d;
+        paradaCercana = p;
+      }
+    }
+
+    res.json({
+      nombre: paradaCercana.nombre,
+      distanciaKm: distanciaMinima.toFixed(2),
+      ruta: paradaCercana.ruta.nombre
+    });
+  } catch (error) {
+    console.error('Error en getParadaCercana:', error);
+    res.status(500).json({ error: 'Error al calcular la parada cercana' });
+  }
+};
