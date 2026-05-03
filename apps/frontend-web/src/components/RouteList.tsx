@@ -1,7 +1,16 @@
 'use client';
 
 import styles from './RouteList.module.css';
-import BusCard from './BusCard';
+import BusCard, { Bus } from './BusCard';
+
+export interface Turno {
+  id: number;
+  fecha: string;
+  horaInicio: string;
+  horaFin?: string;
+  estado: string;
+  bus?: Bus;
+}
 
 export interface Route {
   id: number;
@@ -13,18 +22,7 @@ export interface Route {
   paradas?: Array<{ id: number; nombre: string; orden: number; latitud?: string; longitud?: string }>;
   horaSalida?: string;
   horaLlegada?: string;
-  turnos?: Array<{
-    id: number;
-    fecha: string;
-    horaInicio: string;
-    horaFin?: string;
-    estado: string;
-    bus?: {
-      placa: string;
-      marca: string;
-      capacidad?: number;
-    };
-  }>;
+  turnos?: Turno[];
 }
 
 interface RouteListProps {
@@ -119,7 +117,10 @@ export default function RouteList({
                   <div className={styles.detail}>
                     <span className={styles.detailLabel}>💵 Precio</span>
                     <span className={styles.detailValue}>
-                      ${parseFloat(String(route.precioPasaje)).toFixed(2)}
+                      {new Intl.NumberFormat('es-EC', { 
+                        style: 'currency', 
+                        currency: 'USD' 
+                      }).format(Number(route.precioPasaje))}
                     </span>
                   </div>
 
@@ -149,24 +150,26 @@ export default function RouteList({
                   )}
                 </div>
 
-                {route.paradas && route.paradas.length > 0 && (
-                  <div className={styles.paradasSection}>
-                    <p className={styles.paradasLabel}>📍 Paradas intermedias:</p>
-                    <div className={styles.paradasList}>
-                      {route.paradas.map((parada) => (
+                <div className={styles.paradasSection}>
+                  <p className={styles.paradasLabel}>📍 Paradas intermedias:</p>
+                  <div className={styles.paradasList}>
+                    {route.paradas && route.paradas.length > 0 ? (
+                      route.paradas.map((parada) => (
                         <span key={parada.id} className={styles.paradaBadge}>
                           {parada.nombre}
                         </span>
-                      ))}
-                    </div>
+                      ))
+                    ) : (
+                      <span className={styles.emptyMessage}>Ruta directa (sin paradas)</span>
+                    )}
                   </div>
-                )}
+                </div>
 
-                {route.turnos && route.turnos.length > 0 && (
-                  <div className={styles.turnosSection}>
-                    <p className={styles.turnosLabel}>🚌 Turnos Disponibles:</p>
-                    <div className={styles.turnosList}>
-                      {route.turnos.slice(0, 3).map((turno) => (
+                <div className={styles.turnosSection}>
+                  <p className={styles.turnosLabel}>🚌 Turnos Disponibles:</p>
+                  <div className={styles.turnosList}>
+                    {route.turnos && route.turnos.length > 0 ? (
+                      route.turnos.slice(0, 3).map((turno) => (
                         turno.bus && (
                           <BusCard 
                             key={turno.id}
@@ -174,16 +177,22 @@ export default function RouteList({
                             horaInicio={turno.horaInicio}
                             horaFin={turno.horaFin}
                           />
+                        ) || (
+                          <div key={turno.id} className={styles.emptyMessage}>
+                            ⚠️ Turno sin bus asignado
+                          </div>
                         )
-                      ))}
-                      {route.turnos.length > 3 && (
+                      ))
+                    ) : (
+                      <span className={styles.emptyMessage}>No hay turnos disponibles para este horario</span>
+                    )}
+                    {route.turnos && route.turnos.length > 3 && (
                         <span className={styles.moreIndicator}>
                           +{route.turnos.length - 3} más
                         </span>
                       )}
                     </div>
                   </div>
-                )}
               </div>
 
               <div className={styles.cardFooter}>
