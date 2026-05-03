@@ -53,8 +53,8 @@ export default function Home() {
 
       queryParams.append('incluirParadas', formData.incluirParadas.toString());
 
-      // API endpoint usando variable de entorno
-      const API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://localhost:3002';
+      // Usamos 127.0.0.1 para asegurar la conexión en entornos locales de Windows
+      const API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://127.0.0.1:3002';
       const apiUrl = `${API_URL}/rutas/search?${queryParams}`;
 
       const response = await fetch(apiUrl);
