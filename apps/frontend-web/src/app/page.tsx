@@ -92,7 +92,11 @@ export default function Home() {
       <div className={styles.mainWrapper}>
         {/* Sección de búsqueda */}
         <section className={styles.searchSection}>
-          <SearchForm onSearch={handleSearch} isLoading={isLoading} />
+          <SearchForm 
+            onSearch={handleSearch} 
+            onInputChange={() => setError(null)}
+            isLoading={isLoading} 
+          />
         </section>
 
         {/* Sección de resultados */}
