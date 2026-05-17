@@ -262,7 +262,8 @@ CREATE TABLE pagos_transferencia (
     banco TEXT NOT NULL,
     referencia TEXT NOT NULL,
     comprobante_url TEXT,
-    estado EstadoTransferencia DEFAULT 'PENDIENTE'
+    estado EstadoTransferencia DEFAULT 'PENDIENTE',
+    creado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE aprobaciones (
