@@ -16,6 +16,7 @@ jest.mock('../src/services/prisma', () => ({
       create: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      count: jest.fn(),
     },
     $transaction: jest.fn(),
   },
@@ -61,6 +62,7 @@ function limpiarUploadDir() {
 beforeEach(() => {
   jest.clearAllMocks();
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+  prismaMock.pagoTransferencia.count.mockResolvedValue(0);
   fromFileMock.mockResolvedValue({ mime: 'application/pdf', ext: 'pdf' });
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -308,6 +310,50 @@ describe('GET /pagos/transferencia/pendientes', () => {
         orderBy: { creadoEn: 'asc' },
       })
     );
+  });
+
+  // ----- Mejora US13 (Sprint): filtros operativos -----
+
+  it('filtra por cedula → where anida pago.compra.boletos.some.cedulaPasajero', async () => {
+    prismaMock.pagoTransferencia.findMany.mockResolvedValue([]);
+    prismaMock.pagoTransferencia.count.mockResolvedValue(0);
+
+    const res = await request(app)
+      .get('/pagos/transferencia/pendientes?cedula=0102030405')
+      .set('X-User-Role', 'OFICINISTA');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['x-total-count']).toBe('0');
+    const callArg = prismaMock.pagoTransferencia.findMany.mock.calls[0][0];
+    expect(callArg.where).toEqual(
+      expect.objectContaining({
+        estado: 'PENDIENTE',
+        pago: { compra: { boletos: { some: { cedulaPasajero: '0102030405' } } } },
+      })
+    );
+  });
+
+  it('filtra por fechaDesde → where.creadoEn.gte y conserva estado PENDIENTE', async () => {
+    prismaMock.pagoTransferencia.findMany.mockResolvedValue([]);
+    prismaMock.pagoTransferencia.count.mockResolvedValue(0);
+
+    const res = await request(app)
+      .get('/pagos/transferencia/pendientes?fechaDesde=2024-11-01')
+      .set('X-User-Role', 'OFICINISTA');
+
+    expect(res.status).toBe(200);
+    const callArg = prismaMock.pagoTransferencia.findMany.mock.calls[0][0];
+    expect(callArg.where.estado).toBe('PENDIENTE');
+    expect(callArg.where.creadoEn.gte).toEqual(new Date('2024-11-01T00:00:00.000Z'));
+  });
+
+  it('limit por encima del máximo → 400', async () => {
+    const res = await request(app)
+      .get('/pagos/transferencia/pendientes?limit=999')
+      .set('X-User-Role', 'OFICINISTA');
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.pagoTransferencia.findMany).not.toHaveBeenCalled();
   });
 });
 
