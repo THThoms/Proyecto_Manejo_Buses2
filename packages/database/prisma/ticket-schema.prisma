@@ -111,6 +111,7 @@ model PagoTransferencia {
   referencia     String
   comprobanteUrl String?              @map("comprobante_url")
   estado         EstadoTransferencia  @default(PENDIENTE)
+  creadoEn       DateTime             @default(now()) @map("creado_en")
 
   pago       PagoPasajero @relation(fields: [pagoId], references: [id])
   aprobacion Aprobacion?

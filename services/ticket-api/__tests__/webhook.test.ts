@@ -255,10 +255,9 @@ describe('expirarComprasPendientes (Fase 6 — cleanup TTL)', () => {
 
     await expirarComprasPendientes();
 
-    // Solo trae compras con estado PENDIENTE creadas antes del límite TTL.
+    // El filtrado por TTL ahora es in-memory (per-método); findMany solo filtra estado.
     const findManyArgs = prismaMock.compra.findMany.mock.calls[0][0];
     expect(findManyArgs.where.estado).toBe('PENDIENTE');
-    expect(findManyArgs.where.creadoEn.lt).toBeInstanceOf(Date);
 
     expect(prismaMock.compra.update).toHaveBeenCalledWith({
       where: { id: 30 },
@@ -282,7 +281,7 @@ describe('expirarComprasPendientes (Fase 6 — cleanup TTL)', () => {
         estado: 'PENDIENTE',
         creadoEn: new Date(Date.now() - 30 * 60 * 1000),
         asientos: [],
-        pago: { id: 99 },
+        pago: { id: 99, metodo: 'TARJETA', estado: 'PENDIENTE' },
       },
     ]);
     prismaMock.pagoPasajero.update.mockResolvedValue({});
