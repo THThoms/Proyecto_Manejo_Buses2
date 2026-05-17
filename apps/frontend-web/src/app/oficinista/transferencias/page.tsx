@@ -9,6 +9,42 @@ const MIN_MOTIVO = 5;
 
 type Tab = 'pendientes' | 'historial';
 
+type EstadoHistorialFiltro = 'TODOS' | 'APROBADO' | 'RECHAZADO';
+
+interface FiltrosPendientes {
+  cedula: string;
+}
+
+interface FiltrosHistorial {
+  estado: EstadoHistorialFiltro;
+  cedula: string;
+  fechaDesde: string;
+  fechaHasta: string;
+}
+
+const FILTROS_PENDIENTES_VACIO: FiltrosPendientes = { cedula: '' };
+const FILTROS_HISTORIAL_VACIO: FiltrosHistorial = {
+  estado: 'TODOS',
+  cedula: '',
+  fechaDesde: '',
+  fechaHasta: '',
+};
+
+function maskCedula(cedula: string | null | undefined): string {
+  if (!cedula) return '—';
+  if (cedula.length <= 4) return '***';
+  return `${cedula.slice(0, 2)}${'*'.repeat(Math.max(0, cedula.length - 4))}${cedula.slice(-2)}`;
+}
+
+function buildQueryString(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v && v.trim()) search.set(k, v.trim());
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : '';
+}
+
 interface Pendiente {
   id: number;
   banco: string;
@@ -53,6 +89,8 @@ export default function OficinistaTransferenciasPage() {
   const [tab, setTab] = useState<Tab>('pendientes');
   const [pendientes, setPendientes] = useState<Pendiente[]>([]);
   const [historial, setHistorial] = useState<AprobacionHist[]>([]);
+  const [totalPendientes, setTotalPendientes] = useState<number | null>(null);
+  const [totalHistorial, setTotalHistorial] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detalle, setDetalle] = useState<Detalle | null>(null);
   const [comprobanteUrl, setComprobanteUrl] = useState<string | null>(null);
@@ -63,12 +101,21 @@ export default function OficinistaTransferenciasPage() {
   const [showModal, setShowModal] = useState(false);
   const [motivo, setMotivo] = useState('');
 
-  // Carga lista activa según tab.
+  // Mejora US13 (Sprint): filtros de búsqueda. Los activos se aplican al
+  // backend; los pending son lo que el oficinista está editando en el form.
+  const [filtrosPendientesActivos, setFiltrosPendientesActivos] = useState<FiltrosPendientes>(FILTROS_PENDIENTES_VACIO);
+  const [filtrosPendientesForm, setFiltrosPendientesForm] = useState<FiltrosPendientes>(FILTROS_PENDIENTES_VACIO);
+  const [filtrosHistorialActivos, setFiltrosHistorialActivos] = useState<FiltrosHistorial>(FILTROS_HISTORIAL_VACIO);
+  const [filtrosHistorialForm, setFiltrosHistorialForm] = useState<FiltrosHistorial>(FILTROS_HISTORIAL_VACIO);
+  const [buscando, setBuscando] = useState(false);
+
+  // Carga lista activa según tab y filtros activos.
   useEffect(() => {
     setMensaje(null);
-    if (tab === 'pendientes') refreshPendientes();
-    else refreshHistorial();
-  }, [tab]);
+    if (tab === 'pendientes') refreshPendientes(filtrosPendientesActivos);
+    else refreshHistorial(filtrosHistorialActivos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, filtrosPendientesActivos, filtrosHistorialActivos]);
 
   // Carga detalle cuando se selecciona pendiente.
   useEffect(() => {
@@ -130,28 +177,70 @@ export default function OficinistaTransferenciasPage() {
     };
   }, [detalle]);
 
-  async function refreshPendientes() {
+  async function refreshPendientes(filtros: FiltrosPendientes = FILTROS_PENDIENTES_VACIO) {
+    setBuscando(true);
     try {
-      const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/pendientes`, {
+      const qs = buildQueryString({ cedula: filtros.cedula });
+      const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/pendientes${qs}`, {
         headers: AUTH_HEADERS,
       });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const data: Pendiente[] = await res.json();
       setPendientes(data);
+      const total = Number(res.headers.get('X-Total-Count'));
+      setTotalPendientes(Number.isFinite(total) ? total : data.length);
     } catch (err) {
       setMensaje({ tipo: 'error', texto: 'No se pudieron cargar los pendientes' });
+    } finally {
+      setBuscando(false);
     }
   }
 
-  async function refreshHistorial() {
+  async function refreshHistorial(filtros: FiltrosHistorial = FILTROS_HISTORIAL_VACIO) {
+    setBuscando(true);
     try {
-      const res = await fetch(`${TICKET_API_URL}/aprobaciones`, { headers: AUTH_HEADERS });
+      const qs = buildQueryString({
+        estado: filtros.estado !== 'TODOS' ? filtros.estado : undefined,
+        cedula: filtros.cedula,
+        fechaDesde: filtros.fechaDesde,
+        fechaHasta: filtros.fechaHasta,
+      });
+      const res = await fetch(`${TICKET_API_URL}/aprobaciones${qs}`, { headers: AUTH_HEADERS });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const data: AprobacionHist[] = await res.json();
       setHistorial(data);
+      const total = Number(res.headers.get('X-Total-Count'));
+      setTotalHistorial(Number.isFinite(total) ? total : data.length);
     } catch {
       setMensaje({ tipo: 'error', texto: 'No se pudo cargar el historial' });
+    } finally {
+      setBuscando(false);
     }
+  }
+
+  function handleBuscarPendientes() {
+    setSelectedId(null);
+    setFiltrosPendientesActivos({ cedula: filtrosPendientesForm.cedula.trim() });
+  }
+
+  function handleLimpiarPendientes() {
+    setSelectedId(null);
+    setFiltrosPendientesForm(FILTROS_PENDIENTES_VACIO);
+    setFiltrosPendientesActivos(FILTROS_PENDIENTES_VACIO);
+  }
+
+  function handleBuscarHistorial() {
+    setFiltrosHistorialActivos({
+      estado: filtrosHistorialForm.estado,
+      cedula: filtrosHistorialForm.cedula.trim(),
+      fechaDesde: filtrosHistorialForm.fechaDesde,
+      fechaHasta: filtrosHistorialForm.fechaHasta,
+    });
+  }
+
+  function handleLimpiarHistorial() {
+    setFiltrosHistorialForm(FILTROS_HISTORIAL_VACIO);
+    setFiltrosHistorialActivos(FILTROS_HISTORIAL_VACIO);
   }
 
   async function handleAprobar() {
@@ -168,7 +257,7 @@ export default function OficinistaTransferenciasPage() {
       if (!res.ok) throw new Error(data?.error ?? `Error ${res.status}`);
       setMensaje({ tipo: 'ok', texto: `Transferencia #${detalle.id} aprobada. Boleto VIGENTE.` });
       setSelectedId(null);
-      await refreshPendientes();
+      await refreshPendientes(filtrosPendientesActivos);
     } catch (err) {
       setMensaje({
         tipo: 'error',
@@ -199,7 +288,7 @@ export default function OficinistaTransferenciasPage() {
       setShowModal(false);
       setMotivo('');
       setSelectedId(null);
-      await refreshPendientes();
+      await refreshPendientes(filtrosPendientesActivos);
     } catch (err) {
       setMensaje({
         tipo: 'error',
@@ -240,12 +329,61 @@ export default function OficinistaTransferenciasPage() {
       )}
 
       {tab === 'pendientes' ? (
-        <div className={styles.layout}>
-          <aside className={styles.lista}>
-            {pendientes.length === 0 ? (
-              <p className={styles.muted}>No hay comprobantes pendientes.</p>
-            ) : (
-              pendientes.map((p) => (
+        <>
+          {/* Mejora US13 (Sprint): búsqueda por cédula sobre pendientes */}
+          <div className={styles.filtros}>
+            <div className={styles.filtroCampo}>
+              <label className={styles.filtroLabel} htmlFor="filtro-cedula-pend">
+                Buscar por cédula
+              </label>
+              <input
+                id="filtro-cedula-pend"
+                className={styles.filtroInput}
+                inputMode="numeric"
+                placeholder="Ej. 0102030405"
+                value={filtrosPendientesForm.cedula}
+                onChange={(e) =>
+                  setFiltrosPendientesForm({ ...filtrosPendientesForm, cedula: e.target.value })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleBuscarPendientes();
+                }}
+              />
+            </div>
+            <div className={styles.filtroAcciones}>
+              <button
+                className={styles.filtroBtnPrim}
+                onClick={handleBuscarPendientes}
+                disabled={buscando}
+              >
+                {buscando ? 'Buscando…' : 'Buscar'}
+              </button>
+              <button
+                className={styles.filtroBtnSec}
+                onClick={handleLimpiarPendientes}
+                disabled={buscando}
+              >
+                Limpiar
+              </button>
+            </div>
+          </div>
+          {totalPendientes !== null && (
+            <div className={styles.contadorResultados}>
+              {totalPendientes} pendiente{totalPendientes === 1 ? '' : 's'}
+              {filtrosPendientesActivos.cedula && ` para la cédula ${filtrosPendientesActivos.cedula}`}
+            </div>
+          )}
+
+          <div className={styles.layout}>
+            <aside className={styles.lista}>
+              {pendientes.length === 0 ? (
+                <p className={styles.muted}>
+                  {filtrosPendientesActivos.cedula
+                    ? 'No se encontraron comprobantes pendientes para esa cédula.'
+                    : 'No hay comprobantes pendientes.'}
+                </p>
+              ) : (
+                pendientes.map((p) => (
                 <button
                   key={p.id}
                   className={`${styles.listItem} ${selectedId === p.id ? styles.listItemActive : ''}`}
@@ -284,7 +422,7 @@ export default function OficinistaTransferenciasPage() {
                 <ul className={styles.pasajeros}>
                   {detalle.pago.compra.boletos.map((b) => (
                     <li key={b.id}>
-                      <strong>{b.nombrePasajero}</strong> · {b.cedulaPasajero}
+                      <strong>{b.nombrePasajero}</strong> · {maskCedula(b.cedulaPasajero)}
                     </li>
                   ))}
                 </ul>
@@ -321,42 +459,132 @@ export default function OficinistaTransferenciasPage() {
               </>
             )}
           </section>
-        </div>
+          </div>
+        </>
       ) : (
-        <div className={styles.tablaWrap}>
-          {historial.length === 0 ? (
-            <p className={styles.muted}>Sin historial de decisiones.</p>
-          ) : (
-            <table className={styles.tabla}>
-              <thead>
-                <tr>
-                  <th>Fecha / Hora</th>
-                  <th>Transferencia</th>
-                  <th>Compra</th>
-                  <th>Oficinista</th>
-                  <th>Estado</th>
-                  <th>Motivo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historial.map((h) => (
-                  <tr key={h.id}>
-                    <td>{new Date(h.revisadoEn).toLocaleString()}</td>
-                    <td>#{h.pagoTransferenciaId}</td>
-                    <td>#{h.pagoTransferencia?.pago?.compra?.id ?? '—'}</td>
-                    <td>{h.oficinistaId}</td>
-                    <td>
-                      <span className={h.estado === 'APROBADO' ? styles.badgeOk : styles.badgeFail}>
-                        {h.estado}
-                      </span>
-                    </td>
-                    <td>{h.observacion ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          {/* Mejora US13 (Sprint): filtros del historial */}
+          <div className={styles.filtros}>
+            <div className={styles.filtroCampoSm}>
+              <label className={styles.filtroLabel} htmlFor="filtro-estado">Estado</label>
+              <select
+                id="filtro-estado"
+                className={styles.filtroSelect}
+                value={filtrosHistorialForm.estado}
+                onChange={(e) =>
+                  setFiltrosHistorialForm({
+                    ...filtrosHistorialForm,
+                    estado: e.target.value as EstadoHistorialFiltro,
+                  })
+                }
+              >
+                <option value="TODOS">Todos</option>
+                <option value="APROBADO">Aprobado</option>
+                <option value="RECHAZADO">Rechazado</option>
+              </select>
+            </div>
+            <div className={styles.filtroCampo}>
+              <label className={styles.filtroLabel} htmlFor="filtro-cedula-hist">Cédula</label>
+              <input
+                id="filtro-cedula-hist"
+                className={styles.filtroInput}
+                inputMode="numeric"
+                placeholder="Ej. 0102030405"
+                value={filtrosHistorialForm.cedula}
+                onChange={(e) =>
+                  setFiltrosHistorialForm({ ...filtrosHistorialForm, cedula: e.target.value })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleBuscarHistorial();
+                }}
+              />
+            </div>
+            <div className={styles.filtroCampoSm}>
+              <label className={styles.filtroLabel} htmlFor="filtro-desde">Fecha desde</label>
+              <input
+                id="filtro-desde"
+                type="date"
+                className={styles.filtroInput}
+                value={filtrosHistorialForm.fechaDesde}
+                onChange={(e) =>
+                  setFiltrosHistorialForm({ ...filtrosHistorialForm, fechaDesde: e.target.value })
+                }
+              />
+            </div>
+            <div className={styles.filtroCampoSm}>
+              <label className={styles.filtroLabel} htmlFor="filtro-hasta">Fecha hasta</label>
+              <input
+                id="filtro-hasta"
+                type="date"
+                className={styles.filtroInput}
+                value={filtrosHistorialForm.fechaHasta}
+                onChange={(e) =>
+                  setFiltrosHistorialForm({ ...filtrosHistorialForm, fechaHasta: e.target.value })
+                }
+              />
+            </div>
+            <div className={styles.filtroAcciones}>
+              <button
+                className={styles.filtroBtnPrim}
+                onClick={handleBuscarHistorial}
+                disabled={buscando}
+              >
+                {buscando ? 'Buscando…' : 'Buscar'}
+              </button>
+              <button
+                className={styles.filtroBtnSec}
+                onClick={handleLimpiarHistorial}
+                disabled={buscando}
+              >
+                Limpiar
+              </button>
+            </div>
+          </div>
+
+          {totalHistorial !== null && (
+            <div className={styles.contadorResultados}>
+              {totalHistorial} resultado{totalHistorial === 1 ? '' : 's'}
+              {filtrosHistorialActivos.estado !== 'TODOS' && ` · ${filtrosHistorialActivos.estado}`}
+            </div>
           )}
-        </div>
+
+          {historial.length === 0 ? (
+            <div className={styles.sinResultados}>
+              No se encontraron aprobaciones para los filtros aplicados.
+            </div>
+          ) : (
+            <div className={styles.tablaWrap}>
+              <table className={styles.tabla}>
+                <thead>
+                  <tr>
+                    <th>Fecha / Hora</th>
+                    <th>Transferencia</th>
+                    <th>Compra</th>
+                    <th>Oficinista</th>
+                    <th>Estado</th>
+                    <th>Motivo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historial.map((h) => (
+                    <tr key={h.id}>
+                      <td>{new Date(h.revisadoEn).toLocaleString()}</td>
+                      <td>#{h.pagoTransferenciaId}</td>
+                      <td>#{h.pagoTransferencia?.pago?.compra?.id ?? '—'}</td>
+                      <td>{h.oficinistaId}</td>
+                      <td>
+                        <span className={h.estado === 'APROBADO' ? styles.badgeOk : styles.badgeFail}>
+                          {h.estado}
+                        </span>
+                      </td>
+                      <td>{h.observacion ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       {showModal && (
