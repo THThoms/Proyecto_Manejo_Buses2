@@ -11,6 +11,7 @@ const MIMES_PERMITIDOS = new Set(['image/jpeg', 'image/png', 'application/pdf'])
 type Estado = 'idle' | 'subiendo' | 'ok' | 'error';
 
 interface Resultado {
+  compraId: number;
   pagoId: number;
   transferenciaId: number;
   estado: string;
@@ -114,6 +115,7 @@ export default function PagoTransferenciaPage() {
 
       setEstado('ok');
       setResultado({
+        compraId: data.compraId ?? Number(compraId.trim()),
         pagoId: data.pagoId,
         transferenciaId: data.transferenciaId,
         estado: data.estado ?? 'PENDIENTE',
@@ -200,6 +202,7 @@ export default function PagoTransferenciaPage() {
               <p>{mensaje}</p>
               {resultado && (
                 <ul className={styles.resultList}>
+                  <li>Compra ID: <code>{resultado.compraId}</code></li>
                   <li>Pago ID: <code>{resultado.pagoId}</code></li>
                   <li>Transferencia ID: <code>{resultado.transferenciaId}</code></li>
                   <li>Estado: <strong>{resultado.estado}</strong></li>
@@ -208,9 +211,19 @@ export default function PagoTransferenciaPage() {
             </div>
           )}
 
-          <button type="submit" className={styles.submitBtn} disabled={subiendo}>
-            {subiendo ? 'Subiendo…' : 'Subir comprobante'}
-          </button>
+          {estado === 'ok' && resultado ? (
+            <a
+              href={`/boleto/${resultado.compraId}`}
+              className={styles.submitBtn}
+              style={{ textAlign: 'center', textDecoration: 'none', display: 'block' }}
+            >
+              Ver mi boleto
+            </a>
+          ) : (
+            <button type="submit" className={styles.submitBtn} disabled={subiendo}>
+              {subiendo ? 'Subiendo…' : 'Subir comprobante'}
+            </button>
+          )}
         </form>
       </div>
     </main>

@@ -120,7 +120,17 @@ export default function CheckoutSuccessPage() {
             ))}
           </div>
 
-          <button className={styles.primaryBtn} onClick={() => router.push('/')}>
+          <button
+            className={styles.primaryBtn}
+            onClick={() => router.push(`/boleto/${compra.id}`)}
+          >
+            Ver mi boleto
+          </button>
+          <button
+            className={styles.primaryBtn}
+            style={{ marginTop: 8, background: 'transparent', color: '#2563eb', border: '1px solid #2563eb' }}
+            onClick={() => router.push('/')}
+          >
             Volver al inicio
           </button>
         </div>
