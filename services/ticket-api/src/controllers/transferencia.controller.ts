@@ -116,14 +116,56 @@ export const crearPagoTransferencia = async (req: Request, res: Response) => {
   }
 };
 
+// Mejora US13 (Sprint): filtros operativos para los pendientes.
+// Sin query params el comportamiento es idéntico al original.
+const pendientesFiltrosSchema = z.object({
+  cedula: z.string().trim().min(1).max(20).optional(),
+  nombrePasajero: z.string().trim().min(1).max(120).optional(),
+  fechaDesde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  fechaHasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(200).default(50),
+});
+
+function buildPendientesWhere(f: z.infer<typeof pendientesFiltrosSchema>) {
+  const where: Record<string, any> = { estado: 'PENDIENTE' };
+
+  const boletoSome: Record<string, any> = {};
+  if (f.cedula) boletoSome.cedulaPasajero = f.cedula;
+  if (f.nombrePasajero) boletoSome.nombrePasajero = { contains: f.nombrePasajero, mode: 'insensitive' };
+  if (Object.keys(boletoSome).length) {
+    where.pago = { compra: { boletos: { some: boletoSome } } };
+  }
+
+  if (f.fechaDesde || f.fechaHasta) {
+    where.creadoEn = {} as Record<string, Date>;
+    if (f.fechaDesde) where.creadoEn.gte = new Date(`${f.fechaDesde}T00:00:00.000Z`);
+    if (f.fechaHasta) where.creadoEn.lte = new Date(`${f.fechaHasta}T23:59:59.999Z`);
+  }
+  return where;
+}
+
 /**
  * US11 CA #3: lista de comprobantes pendientes para el oficinista.
  * Solo rol OFICINISTA (middleware aparte).
+ *
+ * Mejora Sprint US13: acepta query params opcionales (cedula, nombrePasajero,
+ * fechaDesde, fechaHasta, page, limit). Sin query params el WHERE sigue siendo
+ * { estado: 'PENDIENTE' } y el orden creadoEn asc. La respuesta sigue siendo
+ * un array; total/page/limit viajan en headers.
  */
-export const listarPendientes = async (_req: Request, res: Response) => {
+export const listarPendientes = async (req: Request, res: Response) => {
+  const parsed = pendientesFiltrosSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Filtros inválidos', detalles: parsed.error.flatten() });
+  }
+  const filtros = parsed.data;
+  const hasFiltros = !!(filtros.cedula || filtros.nombrePasajero || filtros.fechaDesde || filtros.fechaHasta);
+  const where = hasFiltros ? buildPendientesWhere(filtros) : { estado: 'PENDIENTE' };
+
   try {
     const pendientes = await prisma.pagoTransferencia.findMany({
-      where: { estado: 'PENDIENTE' },
+      where,
       orderBy: { creadoEn: 'asc' },
       include: {
         pago: {
@@ -134,8 +176,14 @@ export const listarPendientes = async (_req: Request, res: Response) => {
           },
         },
       },
+      skip: (filtros.page - 1) * filtros.limit,
+      take: filtros.limit,
     });
+    const total = await prisma.pagoTransferencia.count({ where });
 
+    res.setHeader('X-Total-Count', String(total));
+    res.setHeader('X-Page', String(filtros.page));
+    res.setHeader('X-Limit', String(filtros.limit));
     return res.json(pendientes);
   } catch (error) {
     console.error('Error al listar transferencias pendientes:', error);
