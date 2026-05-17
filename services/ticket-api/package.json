@@ -1,22 +1,34 @@
 {
   "name": "@proyecto-saas/ticket-api",
   "version": "1.0.0",
+  "main": "src/index.ts",
   "scripts": {
     "dev": "nodemon src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "jest",
+    "db:push": "npx prisma db push --schema=../../packages/database/prisma/ticket-schema.prisma",
+    "generate": "npx prisma generate --schema=../../packages/database/prisma/ticket-schema.prisma"
   },
   "dependencies": {
+    "@prisma/client": "^5.22.0",
     "@proyecto-saas/database": "*",
-    "express": "^4.18.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "stripe": "^17.5.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/express": "^4.17.17",
     "@types/cors": "^2.8.13",
-    "typescript": "^5.1.6",
+    "@types/express": "^4.17.17",
+    "@types/jest": "^29.5.13",
+    "@types/node": "^20.4.5",
+    "jest": "^29.7.0",
     "nodemon": "^3.0.1",
-    "ts-node": "^10.9.1"
+    "prisma": "^5.22.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.6"
   }
 }
