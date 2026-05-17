@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import healthRoutes from './routes/health.routes';
 import compraRoutes from './routes/compra.routes';
 import pagoRoutes from './routes/pago.routes';
+import transferenciaRoutes from './routes/transferencia.routes';
 import webhookRoutes from './routes/webhook.routes';
 import { iniciarLimpiezaTTL } from './services/expirarCompras';
 
@@ -24,6 +25,7 @@ app.use(express.json());
 app.use('/health', healthRoutes);
 app.use('/compras', compraRoutes);
 app.use('/pagos', pagoRoutes);
+app.use('/pagos/transferencia', transferenciaRoutes);
 
 app.listen(port, () => {
   console.log(`Ticket API corriendo en el puerto ${port}`);
