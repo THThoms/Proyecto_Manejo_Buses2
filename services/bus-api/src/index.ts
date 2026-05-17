@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../../../packages/database/prisma/generated/bus-client';
 
 import busRoutes from './routes/bus.routes';
 import rutaRoutes from './routes/ruta.routes';

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient, DiaSemana } from '@prisma/client';
+import { PrismaClient, DiaSemana } from '../../../../packages/database/prisma/generated/bus-client';
 
 const prisma = new PrismaClient();
 
