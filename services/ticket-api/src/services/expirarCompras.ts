@@ -1,23 +1,70 @@
 import prisma from './prisma';
 import { liberarAsiento } from './busApiClient';
 
-const TTL_MINUTES = Number(process.env.COMPRA_TTL_MINUTES ?? '15');
-const INTERVALO_MS = 5 * 60 * 1000; // scan cada 5 min
+const TTL_TARJETA_MS = Number(process.env.COMPRA_TTL_TARJETA_MS ?? 15 * 60 * 1000);          // 15 min
+const TTL_TRANSFER_MS = Number(process.env.COMPRA_TTL_TRANSFERENCIA_MS ?? 24 * 60 * 60 * 1000); // 24 h
+const TTL_SIN_PAGO_MS = Number(process.env.COMPRA_TTL_SIN_PAGO_MS ?? 15 * 60 * 1000);        // 15 min
+const INTERVALO_MS = 5 * 60 * 1000;
+
+type CompraCandidata = Awaited<ReturnType<typeof cargarCandidatas>>[number];
+
+async function cargarCandidatas() {
+  return prisma.compra.findMany({
+    where: { estado: 'PENDIENTE' },
+    include: {
+      asientos: true,
+      pago: { include: { pagoTransferencia: true } },
+    },
+  });
+}
 
 /**
- * US10: Libera asientos de compras PENDIENTE que llevan más de TTL_MINUTES
- * sin confirmación de pago. Evita que se queden asientos bloqueados si el
- * usuario cierra el navegador antes de pagar y Stripe nunca manda webhook.
+ * Decide si una compra PENDIENTE ya superó su TTL.
+ * Reglas (US10 + US11):
+ *  - Sin pago → 15 min desde creación de la compra.
+ *  - Pago TARJETA pendiente → 15 min desde creación de la compra.
+ *  - Pago TRANSFERENCIA pendiente → 24 h desde creación del pagoTransferencia.
+ *  - Pago APROBADO o RECHAZADO → no expira por TTL (otro flujo se encarga).
+ *  - EFECTIVO u otros → no expira por TTL aquí.
+ */
+export function compraExpiro(compra: CompraCandidata, ahora: Date = new Date()): boolean {
+  const ahoraMs = ahora.getTime();
+
+  if (!compra.pago) {
+    return ahoraMs - compra.creadoEn.getTime() > TTL_SIN_PAGO_MS;
+  }
+
+  if (compra.pago.estado !== 'PENDIENTE') {
+    return false;
+  }
+
+  if (compra.pago.metodo === 'TARJETA') {
+    return ahoraMs - compra.creadoEn.getTime() > TTL_TARJETA_MS;
+  }
+
+  if (compra.pago.metodo === 'TRANSFERENCIA') {
+    const transf = compra.pago.pagoTransferencia;
+    if (!transf) {
+      // Pago marcado TRANSFERENCIA pero sin comprobante aún: aplica TTL de "sin pago".
+      return ahoraMs - compra.creadoEn.getTime() > TTL_SIN_PAGO_MS;
+    }
+    return ahoraMs - transf.creadoEn.getTime() > TTL_TRANSFER_MS;
+  }
+
+  return false;
+}
+
+/**
+ * US10 + US11: libera asientos de compras PENDIENTE que ya excedieron su TTL.
+ * El TTL aplicable depende del método de pago (ver compraExpiro).
  */
 export async function expirarComprasPendientes() {
-  const limite = new Date(Date.now() - TTL_MINUTES * 60 * 1000);
+  const candidatas = await cargarCandidatas();
+  const ahora = new Date();
 
-  const compras = await prisma.compra.findMany({
-    where: { estado: 'PENDIENTE', creadoEn: { lt: limite } },
-    include: { asientos: true, pago: true },
-  });
+  for (const compra of candidatas) {
+    if (!compraExpiro(compra, ahora)) continue;
 
-  for (const compra of compras) {
     try {
       await prisma.$transaction(async (tx) => {
         if (compra.pago) {
@@ -48,7 +95,7 @@ export async function expirarComprasPendientes() {
         }
       }
 
-      console.log(`[cleanup] compra #${compra.id} expirada por TTL de ${TTL_MINUTES} min`);
+      console.log(`[cleanup] compra #${compra.id} expirada (método=${compra.pago?.metodo ?? 'SIN_PAGO'})`);
     } catch (err) {
       console.error(`[cleanup] error procesando compra #${compra.id}:`, err);
     }
@@ -56,7 +103,9 @@ export async function expirarComprasPendientes() {
 }
 
 export function iniciarLimpiezaTTL() {
-  console.log(`[cleanup] TTL ${TTL_MINUTES} min, scan cada ${INTERVALO_MS / 60000} min`);
+  console.log(
+    `[cleanup] TTL tarjeta=${TTL_TARJETA_MS / 60000}min transferencia=${TTL_TRANSFER_MS / 60000}min sinPago=${TTL_SIN_PAGO_MS / 60000}min, scan cada ${INTERVALO_MS / 60000}min`
+  );
   setInterval(() => {
     expirarComprasPendientes().catch((err) => {
       console.error('[cleanup] tick falló:', err);
