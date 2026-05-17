@@ -188,27 +188,103 @@ export const rechazar = async (req: Request, res: Response) => {
   }
 };
 
+// Mejora US13 (Sprint): filtros operativos para el historial.
+// Mantiene la respuesta como array; total/paginación viajan en headers
+// X-Total-Count, X-Page, X-Limit para no romper consumidores actuales.
+const historialFiltrosSchema = z.object({
+  estado: z.enum(['APROBADO', 'RECHAZADO', 'TODOS']).optional(),
+  cedula: z.string().trim().min(1).max(20).optional(),
+  nombrePasajero: z.string().trim().min(1).max(120).optional(),
+  compraId: z.coerce.number().int().positive().optional(),
+  pagoTransferenciaId: z.coerce.number().int().positive().optional(),
+  oficinistaId: z.coerce.number().int().positive().optional(),
+  fechaDesde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  fechaHasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(200).default(50),
+});
+
+function buildHistorialWhere(f: z.infer<typeof historialFiltrosSchema>) {
+  const where: Record<string, any> = {};
+  if (f.estado && f.estado !== 'TODOS') where.estado = f.estado;
+  if (f.oficinistaId) where.oficinistaId = f.oficinistaId;
+  if (f.pagoTransferenciaId) where.pagoTransferenciaId = f.pagoTransferenciaId;
+
+  const boletoSome: Record<string, any> = {};
+  if (f.cedula) boletoSome.cedulaPasajero = f.cedula;
+  if (f.nombrePasajero) boletoSome.nombrePasajero = { contains: f.nombrePasajero, mode: 'insensitive' };
+
+  const compraWhere: Record<string, any> = {};
+  if (Object.keys(boletoSome).length) compraWhere.boletos = { some: boletoSome };
+  if (f.compraId) compraWhere.id = f.compraId;
+
+  if (Object.keys(compraWhere).length) {
+    where.pagoTransferencia = { pago: { compra: compraWhere } };
+  }
+
+  if (f.fechaDesde || f.fechaHasta) {
+    where.revisadoEn = {} as Record<string, Date>;
+    if (f.fechaDesde) where.revisadoEn.gte = new Date(`${f.fechaDesde}T00:00:00.000Z`);
+    if (f.fechaHasta) where.revisadoEn.lte = new Date(`${f.fechaHasta}T23:59:59.999Z`);
+  }
+  return where;
+}
+
 /**
  * US12 CA #5: Historial de decisiones (fecha, hora, oficinista responsable, motivo).
+ * Mejora Sprint US13: acepta query params opcionales (estado, cedula,
+ * nombrePasajero, compraId, pagoTransferenciaId, oficinistaId, fechaDesde,
+ * fechaHasta, page, limit). Sin query params el comportamiento es idéntico al
+ * original. La forma de respuesta sigue siendo un array; total y paginación se
+ * exponen en headers.
  */
-export const listarHistorial = async (_req: Request, res: Response) => {
+export const listarHistorial = async (req: Request, res: Response) => {
+  const parsed = historialFiltrosSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Filtros inválidos', detalles: parsed.error.flatten() });
+  }
+  const filtros = parsed.data;
+  const where = buildHistorialWhere(filtros);
+  const hasFiltros = Object.keys(where).length > 0;
+
   try {
-    const historial = await prisma.aprobacion.findMany({
-      orderBy: { revisadoEn: 'desc' },
-      include: {
-        pagoTransferencia: {
-          include: {
-            pago: {
-              include: {
-                compra: {
-                  select: { id: true, total: true, fechaViaje: true, turnoId: true },
-                },
+    const include = {
+      pagoTransferencia: {
+        include: {
+          pago: {
+            include: {
+              compra: {
+                select: { id: true, total: true, fechaViaje: true, turnoId: true },
               },
             },
           },
         },
       },
-    });
+    };
+    const skip = (filtros.page - 1) * filtros.limit;
+    const take = filtros.limit;
+
+    const historial = hasFiltros
+      ? await prisma.aprobacion.findMany({
+          where: where as any,
+          orderBy: { revisadoEn: 'desc' },
+          include,
+          skip,
+          take,
+        })
+      : await prisma.aprobacion.findMany({
+          orderBy: { revisadoEn: 'desc' },
+          include,
+          skip,
+          take,
+        });
+    const total = hasFiltros
+      ? await prisma.aprobacion.count({ where: where as any })
+      : await prisma.aprobacion.count();
+
+    res.setHeader('X-Total-Count', String(total));
+    res.setHeader('X-Page', String(filtros.page));
+    res.setHeader('X-Limit', String(filtros.limit));
     return res.json(historial);
   } catch (err) {
     console.error('Error al listar historial:', err);
