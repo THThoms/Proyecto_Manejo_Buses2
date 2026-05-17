@@ -4,6 +4,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "./generated/ticket-client"
 }
 
 datasource db {
@@ -15,6 +16,7 @@ model Compra {
   id          Int           @id @default(autoincrement())
   usuarioId   Int           @map("usuario_id")       // Auth Service
   frecuenciaId Int          @map("frecuencia_id")    // Bus Service
+  turnoId     Int?          @map("turno_id")         // Bus Service (US10: necesario para liberar/ocupar asientos)
   fechaViaje  DateTime      @map("fecha_viaje") @db.Date
   cantidad    Int           @default(1)
   total       Decimal       @db.Decimal(10, 2)
@@ -22,10 +24,38 @@ model Compra {
   estado      EstadoCompra  @default(PENDIENTE)
   creadoEn    DateTime      @default(now()) @map("creado_en")
 
-  boletos Boleto[]
-  pago    PagoPasajero?
+  boletos  Boleto[]
+  pago     PagoPasajero?
+  asientos CompraAsiento[]
 
   @@map("compras")
+}
+
+model CompraAsiento {
+  id              Int                   @id @default(autoincrement())
+  compraId        Int                   @map("compra_id")
+  asientoTurnoId  Int                   @map("asiento_turno_id")  // Bus Service (asiento_turnos.id)
+  asientoId       Int                   @map("asiento_id")        // Bus Service (asientos.id)
+  turnoId         Int                   @map("turno_id")          // Bus Service (turnos.id)
+  estado          EstadoCompraAsiento   @default(RESERVADO)
+  creadoEn        DateTime              @default(now()) @map("creado_en")
+  actualizadoEn   DateTime              @default(now()) @updatedAt @map("actualizado_en")
+
+  compra Compra @relation(fields: [compraId], references: [id])
+
+  @@unique([compraId, asientoTurnoId])
+  @@map("compra_asientos")
+}
+
+model EventoWebhook {
+  id          Int       @id @default(autoincrement())
+  provider    String                                       // "stripe", "payphone", etc.
+  eventId     String    @unique @map("event_id")           // ID del evento del proveedor (idempotencia)
+  tipo        String                                       // "checkout.session.completed", etc.
+  procesadoEn DateTime? @map("procesado_en")
+  recibidoEn  DateTime  @default(now()) @map("recibido_en")
+
+  @@map("eventos_webhook")
 }
 
 model Boleto {
@@ -232,4 +262,10 @@ enum EstadoAlerta {
   ACTIVA
   DISPARADA
   INACTIVA
+}
+
+enum EstadoCompraAsiento {
+  RESERVADO
+  OCUPADO
+  LIBERADO
 }
