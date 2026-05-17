@@ -74,7 +74,7 @@ export const crearPagoTransferencia = async (req: Request, res: Response) => {
     // URL relativa que solo se sirve via GET /pagos/transferencia/:id/comprobante.
     const comprobanteUrl = path.posix.join('/comprobantes', path.basename(file.path));
 
-    const resultado = await prisma.$transaction(async (tx) => {
+    const resultado = await prisma.$transaction(async (tx: any) => {
       const pago = compra.pago
         ? await tx.pagoPasajero.update({
             where: { id: compra.pago.id },
@@ -103,6 +103,7 @@ export const crearPagoTransferencia = async (req: Request, res: Response) => {
     });
 
     return res.status(201).json({
+      compraId,
       pagoId: resultado.pago.id,
       transferenciaId: resultado.transferencia.id,
       estado: resultado.transferencia.estado,
@@ -139,6 +140,39 @@ export const listarPendientes = async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Error al listar transferencias pendientes:', error);
     return res.status(500).json({ error: 'Error interno al listar pendientes' });
+  }
+};
+
+/**
+ * US12: detalle del comprobante para la pantalla de revisión del oficinista.
+ * Devuelve la transferencia con su pago, compra (con asientos+boletos) y
+ * aprobación si ya fue procesada. Solo rol OFICINISTA.
+ */
+export const getDetalle = async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'id inválido' });
+  }
+
+  try {
+    const transferencia = await prisma.pagoTransferencia.findUnique({
+      where: { id },
+      include: {
+        aprobacion: true,
+        pago: {
+          include: {
+            compra: { include: { asientos: true, boletos: true } },
+          },
+        },
+      },
+    });
+    if (!transferencia) {
+      return res.status(404).json({ error: 'Transferencia no encontrada' });
+    }
+    return res.json(transferencia);
+  } catch (error) {
+    console.error('Error al obtener detalle de transferencia:', error);
+    return res.status(500).json({ error: 'Error interno al obtener el detalle' });
   }
 };
 

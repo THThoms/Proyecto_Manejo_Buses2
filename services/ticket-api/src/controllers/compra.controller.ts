@@ -67,7 +67,7 @@ export const crearCompra = async (req: Request, res: Response) => {
 
     const expiraEn = new Date(Date.now() + EXPIRACION_BOLETO_HORAS * 60 * 60 * 1000);
 
-    const compra = await prisma.$transaction(async (tx) => {
+    const compra = await prisma.$transaction(async (tx: any) => {
       const nuevaCompra = await tx.compra.create({
         data: {
           usuarioId: body.usuarioId,
@@ -146,5 +146,90 @@ export const obtenerCompra = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error al obtener compra:', error);
     return res.status(500).json({ error: 'Error interno al obtener la compra' });
+  }
+};
+
+/**
+ * US12 (soporte visual): resumen sanitizado para que el cliente vea su boleto.
+ * Devuelve solo datos NO sensibles. Omite:
+ *  - referenciaPasarela (Stripe paymentIntent id)
+ *  - comprobanteUrl (ruta server-side del archivo)
+ *
+ * Usado por la pantalla /boleto/[compraId] tras pago con tarjeta o transferencia.
+ */
+export const obtenerResumen = async (req: Request, res: Response) => {
+  const id = Number(req.params.compraId);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'compraId inválido' });
+  }
+
+  try {
+    const compra = await prisma.compra.findUnique({
+      where: { id },
+      include: {
+        boletos: true,
+        asientos: true,
+        pago: {
+          include: { pagoTarjeta: true, pagoTransferencia: true },
+        },
+      },
+    });
+    if (!compra) {
+      return res.status(404).json({ error: 'Compra no encontrada' });
+    }
+
+    const resumen = {
+      compraId: compra.id,
+      estadoCompra: compra.estado,
+      total: compra.total,
+      canal: compra.canal,
+      fechaCompra: compra.creadoEn,
+      fechaViaje: compra.fechaViaje,
+      turnoId: compra.turnoId,
+      frecuenciaId: compra.frecuenciaId,
+      boletos: compra.boletos.map((b) => ({
+        id: b.id,
+        estado: b.estado,
+        nombrePasajero: b.nombrePasajero,
+        cedulaPasajero: b.cedulaPasajero,
+        tipoTarifa: b.tipoTarifa,
+        uuidQr: b.uuidQr,
+        expiraEn: b.expiraEn,
+      })),
+      asientos: compra.asientos.map((a) => ({
+        id: a.id,
+        asientoId: a.asientoId,
+        turnoId: a.turnoId,
+        estado: a.estado,
+      })),
+      pago: compra.pago
+        ? {
+            estado: compra.pago.estado,
+            monto: compra.pago.monto,
+            pagadoEn: compra.pago.pagadoEn,
+            metodo: compra.pago.metodo,
+            tarjeta: compra.pago.pagoTarjeta
+              ? {
+                  marca: compra.pago.pagoTarjeta.marca,
+                  ultimos4: compra.pago.pagoTarjeta.ultimos4,
+                }
+              : null,
+            transferencia: compra.pago.pagoTransferencia
+              ? {
+                  id: compra.pago.pagoTransferencia.id,
+                  banco: compra.pago.pagoTransferencia.banco,
+                  referencia: compra.pago.pagoTransferencia.referencia,
+                  estado: compra.pago.pagoTransferencia.estado,
+                  creadoEn: compra.pago.pagoTransferencia.creadoEn,
+                }
+              : null,
+          }
+        : null,
+    };
+
+    return res.json(resumen);
+  } catch (error) {
+    console.error('Error al obtener resumen de compra:', error);
+    return res.status(500).json({ error: 'Error interno al obtener el resumen' });
   }
 };

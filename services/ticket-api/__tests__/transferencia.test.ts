@@ -61,7 +61,6 @@ function limpiarUploadDir() {
 beforeEach(() => {
   jest.clearAllMocks();
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
-  // Default: archivo válido (magic bytes coinciden con application/pdf)
   fromFileMock.mockResolvedValue({ mime: 'application/pdf', ext: 'pdf' });
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -181,7 +180,7 @@ describe('POST /pagos/transferencia', () => {
 
   it('magic bytes inválidos → 415 y archivo borrado del disco', async () => {
     setCompraDisponible();
-    fromFileMock.mockResolvedValue(undefined); // no se detecta tipo real
+    fromFileMock.mockResolvedValue(undefined);
 
     const res = await request(app)
       .post('/pagos/transferencia')
@@ -194,14 +193,11 @@ describe('POST /pagos/transferencia', () => {
       });
 
     expect(res.status).toBe(415);
-
-    // El archivo subido debe haber sido eliminado por validarMagicBytes.
-    const archivosRestantes = fs.readdirSync(TEST_UPLOAD_DIR);
-    expect(archivosRestantes).toEqual([]);
+    expect(fs.readdirSync(TEST_UPLOAD_DIR)).toEqual([]);
   });
 
   it('archivo > 5MB → 413', async () => {
-    const buf = Buffer.alloc(5 * 1024 * 1024 + 1, 0); // 5MB + 1 byte
+    const buf = Buffer.alloc(5 * 1024 * 1024 + 1, 0);
     PDF_BUF.copy(buf, 0);
 
     const res = await request(app)
@@ -280,9 +276,22 @@ describe('GET /pagos/transferencia/pendientes', () => {
     expect(prismaMock.pagoTransferencia.findMany).not.toHaveBeenCalled();
   });
 
-  it('con rol OFICINISTA → 200 y devuelve lista', async () => {
+  it('con rol OFICINISTA → 200, solo pendientes y ordenado por fecha de envío', async () => {
     prismaMock.pagoTransferencia.findMany.mockResolvedValue([
-      { id: 600, estado: 'PENDIENTE', banco: 'Pichincha' },
+      {
+        id: 600,
+        estado: 'PENDIENTE',
+        banco: 'Pichincha',
+        creadoEn: '2024-11-01T10:00:00.000Z',
+        pago: { compra: { id: 50, total: '5.50', fechaViaje: '2024-11-09', turnoId: 7 } },
+      },
+      {
+        id: 601,
+        estado: 'PENDIENTE',
+        banco: 'Guayaquil',
+        creadoEn: '2024-11-02T10:00:00.000Z',
+        pago: { compra: { id: 51, total: '6.00', fechaViaje: '2024-11-10', turnoId: 9 } },
+      },
     ]);
 
     const res = await request(app)
@@ -290,10 +299,83 @@ describe('GET /pagos/transferencia/pendientes', () => {
       .set('X-User-Role', 'OFICINISTA');
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(1);
+    expect(res.body).toHaveLength(2);
+    expect(res.body.every((item: any) => item.estado === 'PENDIENTE')).toBe(true);
+    expect(res.body.map((item: any) => item.id)).toEqual([600, 601]);
     expect(prismaMock.pagoTransferencia.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { estado: 'PENDIENTE' } })
+      expect.objectContaining({
+        where: { estado: 'PENDIENTE' },
+        orderBy: { creadoEn: 'asc' },
+      })
     );
+  });
+});
+
+describe('GET /pagos/transferencia/:id', () => {
+  it('sin rol OFICINISTA → 403', async () => {
+    const res = await request(app).get('/pagos/transferencia/600');
+    expect(res.status).toBe(403);
+    expect(prismaMock.pagoTransferencia.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('transferencia inexistente con rol → 404', async () => {
+    prismaMock.pagoTransferencia.findUnique.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get('/pagos/transferencia/999')
+      .set('X-User-Role', 'OFICINISTA');
+
+    expect(res.status).toBe(404);
+  });
+
+  it('con rol OFICINISTA → 200 y devuelve datos de compra, boleto, pago y comprobante', async () => {
+    prismaMock.pagoTransferencia.findUnique.mockResolvedValue({
+      id: 600,
+      estado: 'PENDIENTE',
+      banco: 'Pichincha',
+      referencia: 'TRX-001',
+      comprobanteUrl: '/comprobantes/comprobante-600.pdf',
+      creadoEn: '2024-11-01T10:00:00.000Z',
+      aprobacion: null,
+      pago: {
+        id: 500,
+        compra: {
+          id: 50,
+          total: '5.50',
+          fechaViaje: '2024-11-09',
+          turnoId: 7,
+          asientos: [{ id: 100, asientoId: 5, estado: 'RESERVADO' }],
+          boletos: [{ id: 200, nombrePasajero: 'Juan Perez', cedulaPasajero: '1723456789' }],
+        },
+      },
+    });
+
+    const res = await request(app)
+      .get('/pagos/transferencia/600')
+      .set('X-User-Role', 'OFICINISTA');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id: 600,
+      banco: 'Pichincha',
+      referencia: 'TRX-001',
+      comprobanteUrl: '/comprobantes/comprobante-600.pdf',
+      pago: {
+        id: 500,
+        compra: {
+          id: 50,
+          boletos: [{ id: 200, nombrePasajero: 'Juan Perez' }],
+          asientos: [{ id: 100, asientoId: 5, estado: 'RESERVADO' }],
+        },
+      },
+    });
+    expect(prismaMock.pagoTransferencia.findUnique).toHaveBeenCalledWith({
+      where: { id: 600 },
+      include: {
+        aprobacion: true,
+        pago: { include: { compra: { include: { asientos: true, boletos: true } } } },
+      },
+    });
   });
 });
 

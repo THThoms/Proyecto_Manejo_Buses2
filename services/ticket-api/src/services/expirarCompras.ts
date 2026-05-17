@@ -66,7 +66,7 @@ export async function expirarComprasPendientes() {
     if (!compraExpiro(compra, ahora)) continue;
 
     try {
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         if (compra.pago) {
           await tx.pagoPasajero.update({
             where: { id: compra.pago.id },
