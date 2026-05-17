@@ -148,9 +148,19 @@ export default function CheckoutPage() {
             Esta compra fue anulada. Volver al inicio
           </button>
         ) : (
-          <button className={styles.primaryBtn} onClick={handlePagar} disabled={paying}>
-            {paying ? 'Redirigiendo a Stripe…' : 'Pagar con tarjeta'}
-          </button>
+          <>
+            <button className={styles.primaryBtn} onClick={handlePagar} disabled={paying}>
+              {paying ? 'Redirigiendo a Stripe…' : 'Pagar con tarjeta'}
+            </button>
+            <button
+              className={styles.secondaryBtn}
+              onClick={() => router.push(`/pago/transferencia?compraId=${compra.id}`)}
+              disabled={paying}
+              style={{ marginTop: 10 }}
+            >
+              Pagar por transferencia
+            </button>
+          </>
         )}
       </div>
     </main>
