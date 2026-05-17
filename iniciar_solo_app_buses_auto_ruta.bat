@@ -26,6 +26,9 @@ set "BUS_DB=postgresql://admin:rootpassword@localhost:5433/bus_db?schema=public"
 set "API_URL=http://127.0.0.1:%BUS_PORT%"
 set "FRONTEND_URL=http://localhost:%WEB_PORT%"
 set "LOGIN_URL=http://localhost:%WEB_PORT%/login"
+set "LOG_DIR=%ROOT%\logs"
+set "STAMP=%date:~-4%%date:~3,2%%date:~0,2%-%time:~0,2%%time:~3,2%%time:~6,2%"
+set "STAMP=%STAMP: =0%"
 
 echo ============================================================
 echo   INICIAR PROYECTO MANEJO BUSES - AUTO RUTA
@@ -125,6 +128,10 @@ REM Se sobrescribe para asegurar que el frontend apunte al bus-api correcto
 echo NEXT_PUBLIC_BUS_API_URL=%API_URL%> "%ROOT%\apps\frontend-web\.env.local"
 echo [OK] apps\frontend-web\.env.local apunta a %API_URL%
 
+if not exist "%LOG_DIR%" (
+    mkdir "%LOG_DIR%"
+)
+
 REM ------------------------------------------------------------
 REM DOCKER
 REM ------------------------------------------------------------
@@ -170,12 +177,17 @@ REM ------------------------------------------------------------
 echo.
 echo [5/5] Abriendo backend y frontend...
 
-start "BUS API - Puerto %BUS_PORT%" /D "%ROOT%\services\bus-api" cmd /k "echo === BUS API %BUS_PORT% === && echo Ruta: %ROOT%\services\bus-api && set BUS_DATABASE_URL=%BUS_DB%&& set DATABASE_URL=%BUS_DB%&& set PORT=%BUS_PORT%&& npm run dev"
+set "BUS_LOG=%LOG_DIR%\bus-api-%STAMP%.log"
+set "BUS_ERR_LOG=%LOG_DIR%\bus-api-%STAMP%.err.log"
+set "WEB_LOG=%LOG_DIR%\frontend-web-%STAMP%.log"
+set "WEB_ERR_LOG=%LOG_DIR%\frontend-web-%STAMP%.err.log"
+
+start "BUS API - Puerto %BUS_PORT%" /D "%ROOT%\services\bus-api" powershell -NoExit -Command "$env:BUS_DATABASE_URL='%BUS_DB%'; $env:DATABASE_URL='%BUS_DB%'; $env:PORT='%BUS_PORT%'; Write-Host '=== BUS API %BUS_PORT% ==='; Write-Host 'Ruta: %ROOT%\services\bus-api'; npm run dev 2> '%BUS_ERR_LOG%' | Tee-Object -FilePath '%BUS_LOG%' -Append"
 
 echo Esperando que levante el backend...
 timeout /t 6 /nobreak >nul
 
-start "FRONTEND WEB - Puerto %WEB_PORT%" /D "%ROOT%\apps\frontend-web" cmd /k "echo === FRONTEND WEB %WEB_PORT% === && echo Ruta: %ROOT%\apps\frontend-web && set NEXT_PUBLIC_BUS_API_URL=%API_URL%&& npm run dev"
+start "FRONTEND WEB - Puerto %WEB_PORT%" /D "%ROOT%\apps\frontend-web" powershell -NoExit -Command "$env:NEXT_PUBLIC_BUS_API_URL='%API_URL%'; Write-Host '=== FRONTEND WEB %WEB_PORT% ==='; Write-Host 'Ruta: %ROOT%\apps\frontend-web'; npm run dev 2> '%WEB_ERR_LOG%' | Tee-Object -FilePath '%WEB_LOG%' -Append"
 
 echo Esperando que levante el frontend...
 timeout /t 12 /nobreak >nul
