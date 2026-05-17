@@ -191,17 +191,40 @@ CREATE TYPE ResultadoEscaneo AS ENUM ('APROBADO', 'RECHAZADO');
 CREATE TYPE EstadoBoletoParada AS ENUM ('PENDIENTE', 'ALERTADO', 'BAJADO');
 CREATE TYPE EstadoAlerta AS ENUM ('ACTIVA', 'DISPARADA', 'INACTIVA');
 CREATE TYPE TipoTarifa AS ENUM ('NORMAL', 'TERCERA_EDAD', 'DISCAPACIDAD', 'MENOR');
+CREATE TYPE EstadoCompraAsiento AS ENUM ('RESERVADO', 'OCUPADO', 'LIBERADO');
 
 CREATE TABLE compras (
     id SERIAL PRIMARY KEY,
     usuario_id INTEGER NOT NULL,
     frecuencia_id INTEGER NOT NULL,
+    turno_id INTEGER,
     fecha_viaje DATE NOT NULL,
     cantidad INTEGER NOT NULL DEFAULT 1,
     total DECIMAL(10, 2) NOT NULL,
     canal CanalVenta NOT NULL,
     estado EstadoCompra DEFAULT 'PENDIENTE',
     creado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE compra_asientos (
+    id SERIAL PRIMARY KEY,
+    compra_id INTEGER NOT NULL REFERENCES compras(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    asiento_turno_id INTEGER NOT NULL,
+    asiento_id INTEGER NOT NULL,
+    turno_id INTEGER NOT NULL,
+    estado EstadoCompraAsiento DEFAULT 'RESERVADO',
+    creado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(compra_id, asiento_turno_id)
+);
+
+CREATE TABLE eventos_webhook (
+    id SERIAL PRIMARY KEY,
+    provider TEXT NOT NULL,
+    event_id TEXT UNIQUE NOT NULL,
+    tipo TEXT NOT NULL,
+    procesado_en TIMESTAMP(3),
+    recibido_en TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE boletos (
