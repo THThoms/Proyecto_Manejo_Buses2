@@ -241,9 +241,10 @@
   color: var(--color-text-primary);
 }
 
-.paradasSection {
-  padding-top: var(--spacing-lg);
+.paradasTimeline {
+  padding: var(--spacing-md) 0;
   border-top: 1px solid var(--color-border-light);
+  margin-top: var(--spacing-md);
 }
 
 .paradasLabel {
@@ -253,22 +254,56 @@
   margin: 0 0 var(--spacing-sm) 0;
 }
 
-.paradasList {
+.timelineContainer {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
+  flex-direction: column;
+  gap: 4px;
+  margin-top: var(--spacing-sm);
+  padding-left: 8px;
 }
 
-.paradaBadge {
-  display: inline-flex;
+.timelineNode {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  background-color: var(--color-bg-tertiary);
+  gap: 12px;
+  position: relative;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot_small {
+  width: 6px;
+  height: 6px;
+  background: var(--color-text-tertiary);
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.line {
+  position: absolute;
+  top: -8px;
+  left: 4px;
+  width: 2px;
+  height: 8px;
+  background: var(--color-border);
+}
+
+.timelineText {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
-  padding: var(--spacing-xs) var(--spacing-md);
-  border-radius: var(--radius-md);
+}
+
+.timelineText_small {
   font-size: var(--font-size-xs);
-  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
 }
 
 .turnosSection {
@@ -394,3 +429,127 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* =============================================
+   TURNO CARDS (nuevas — selección de horario)
+   ============================================= */
+
+.routeMeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+}
+
+.routeName {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.turnosGrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.turnoCard {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  width: 100%;
+}
+
+.turnoCard:hover {
+  background: linear-gradient(135deg, #eff6ff, #f5f3ff);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(4px);
+}
+
+.turnoTime {
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.turnoHora {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.turnoHoraFin {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.turnoBusInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex: 1;
+}
+
+.turnoBusIcon { font-size: 1.2rem; }
+
+.turnoBusPlaca {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.turnoBusMarca {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.turnoCapacidad {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-left: auto;
+}
+
+.turnoEstado {
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.turnoSelectHint {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  flex-shrink: 0;
+}
+
+.noTurnos {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+}
+
+.emptyMessage {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+

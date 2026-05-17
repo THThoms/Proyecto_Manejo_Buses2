@@ -69,7 +69,14 @@ export default function Home() {
         }
       } else {
         const data = await response.json();
-        setRoutes(Array.isArray(data) ? data : data.data || []);
+        const rawRoutes = Array.isArray(data) ? data : data.data || [];
+        // Mapear campos del API al formato que espera RouteList
+        const mappedRoutes = rawRoutes.map((r: any) => ({
+          ...r,
+          precio: r.precio ?? r.precioPasaje ?? 0,
+          duracion: r.duracion ?? (r.duracionMin != null ? r.duracionMin / 60 : 0),
+        }));
+        setRoutes(mappedRoutes);
 
         if (Array.isArray(data) && data.length === 0) {
           setError('No se encontraron rutas con esos criterios');

@@ -1,0 +1,266 @@
+/* ============================================
+   SeatMap.module.css — US08 Mapa de Asientos
+   ============================================ */
+
+.seatMapContainer {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  box-shadow: var(--shadow-md);
+}
+
+/* ---- Cabecera ---- */
+.busHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--spacing-md);
+  border-bottom: 2px dashed var(--color-border);
+}
+
+.busFront {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.busIcon {
+  font-size: 2rem;
+}
+
+.busFrontLabel {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-tertiary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.availability {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.availCount {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-success);
+  line-height: 1;
+}
+
+.availLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* ---- Leyenda ---- */
+.legend {
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: var(--spacing-sm) 0;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.legendIcon { font-size: 0.8rem; }
+.legendLabel { font-weight: var(--font-weight-medium); }
+
+/* ---- Cuerpo del bus ---- */
+.busBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: linear-gradient(180deg, #f8faff 0%, #f0f4ff 100%);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  border: 2px solid #e0e7ff;
+}
+
+/* ---- Fila del chofer ---- */
+.driverRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.driverSeat {
+  background: #dbeafe;
+  border: 2px solid #93c5fd;
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: #1d4ed8;
+}
+
+/* ---- Fila de asientos ---- */
+.seatRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+}
+
+.seatGroup {
+  display: flex;
+  gap: 6px;
+}
+
+.seatGroup5 {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  width: 100%;
+}
+
+/* ---- Pasillo ---- */
+.aisle {
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rowNumber {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ---- Asiento base ---- */
+.seat {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px 8px 4px 4px;
+  border: 2px solid;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  position: relative;
+  padding: 0;
+  font-family: inherit;
+}
+
+.seatNumber {
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.seatType {
+  font-size: 9px;
+  line-height: 1;
+}
+
+/* ---- Estados de asiento ---- */
+.seat_DISPONIBLE {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  border-color: #34d399;
+  color: #065f46;
+}
+
+.seat_DISPONIBLE:hover:not(:disabled) {
+  background: linear-gradient(135deg, #6ee7b7, #34d399);
+  border-color: #10b981;
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  z-index: 2;
+}
+
+.seat_RESERVADO {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-color: #f59e0b;
+  color: #92400e;
+  cursor: not-allowed;
+}
+
+.seat_OCUPADO {
+  background: linear-gradient(135deg, #fee2e2, #fca5a5);
+  border-color: #ef4444;
+  color: #7f1d1d;
+  cursor: not-allowed;
+}
+
+.seat_VACIO {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.seat_SELECTED,
+.seat_SELECTED:hover {
+  background: #ffffff !important;
+  border-color: #000000 !important;
+  color: #000000 !important;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.25);
+  transform: scale(1.12) translateY(-3px);
+  z-index: 3;
+}
+
+
+/* ---- Banner de selección ---- */
+.selectionBanner {
+  background: linear-gradient(135deg, #dbeafe, #ede9fe);
+  border: 1px solid #93c5fd;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: #1e40af;
+  text-align: center;
+  animation: fadeInUp 0.25s ease-out;
+}
+
+/* ---- Loading ---- */
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl);
+  color: var(--color-text-secondary);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 480px) {
+  .seat {
+    width: 36px;
+    height: 36px;
+  }
+  .seatNumber { font-size: 10px; }
+  .busBody { padding: var(--spacing-sm); }
+}

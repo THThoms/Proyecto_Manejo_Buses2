@@ -97,6 +97,7 @@ model Parada {
   orden        Int
   latitud      Decimal @db.Decimal(10, 8)
   longitud     Decimal @db.Decimal(11, 8)
+  precioDesdeOrigen Decimal @default(0) @map("precio_desde_origen") @db.Decimal(10, 2)
   metrosAlerta Int     @default(500) @map("metros_alerta")
 
   ruta Ruta @relation(fields: [rutaId], references: [id])
