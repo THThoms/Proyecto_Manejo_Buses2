@@ -4,9 +4,11 @@ import {
   crearPagoTransferencia,
   listarPendientes,
   descargarComprobante,
+  getDetalle,
 } from '../controllers/transferencia.controller';
 import { uploadComprobante, MulterMimeRejected } from '../services/upload';
 import { requireOficinista } from '../middlewares/requireOficinista';
+import { transferenciaDecisionRouter } from './aprobacion.routes';
 
 const router = Router();
 
@@ -38,7 +40,13 @@ router.post(
 // GET /pagos/transferencia/pendientes → oficinista lista comprobantes
 router.get('/pendientes', requireOficinista, listarPendientes);
 
+// GET /pagos/transferencia/:id → detalle para la pantalla de revisión (US12)
+router.get('/:id', requireOficinista, getDetalle);
+
 // GET /pagos/transferencia/:id/comprobante → oficinista descarga archivo
 router.get('/:id/comprobante', requireOficinista, descargarComprobante);
+
+// POST /pagos/transferencia/:id/aprobar y /rechazar (US12)
+router.use('/', transferenciaDecisionRouter);
 
 export default router;

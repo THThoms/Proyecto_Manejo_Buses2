@@ -2,7 +2,8 @@ import { Request, Response } from 'express';
 import Stripe from 'stripe';
 import prisma from '../services/prisma';
 import stripe from '../services/stripe';
-import { ocuparAsiento, liberarAsiento } from '../services/busApiClient';
+import { liberarAsiento } from '../services/busApiClient';
+import { confirmarPagoYOcuparAsientos } from '../services/confirmarPago';
 
 const EVENTOS_EXITO = new Set(['checkout.session.completed']);
 const EVENTOS_FALLO = new Set([
@@ -102,56 +103,27 @@ async function manejarExito(event: Stripe.Event) {
     }
   }
 
-  const compra = await prisma.compra.findUnique({
-    where: { id: compraId },
-    include: { asientos: true, boletos: true },
+  // Persistimos el detalle de la tarjeta (específico al webhook Stripe) ANTES del
+  // helper compartido para no perderlo si la confirmación general falla a medias.
+  await prisma.pagoTarjeta.upsert({
+    where: { pagoId },
+    create: {
+      pagoId,
+      ultimos4: last4,
+      marca: brand,
+      referenciaPasarela: paymentIntentId || session.id,
+    },
+    update: {
+      ultimos4: last4,
+      marca: brand,
+      referenciaPasarela: paymentIntentId || session.id,
+    },
   });
-  if (!compra) {
+
+  // Lógica común con US12 (aprobación manual de transferencia).
+  const resultado = await confirmarPagoYOcuparAsientos(compraId, pagoId);
+  if (!resultado) {
     console.warn('[webhook] compra no encontrada:', compraId);
-    return;
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.pagoPasajero.update({
-      where: { id: pagoId },
-      data: { estado: 'APROBADO', pagadoEn: new Date() },
-    });
-    await tx.pagoTarjeta.upsert({
-      where: { pagoId },
-      create: {
-        pagoId,
-        ultimos4: last4,
-        marca: brand,
-        referenciaPasarela: paymentIntentId || session.id,
-      },
-      update: {
-        ultimos4: last4,
-        marca: brand,
-        referenciaPasarela: paymentIntentId || session.id,
-      },
-    });
-    await tx.compra.update({ where: { id: compraId }, data: { estado: 'CONFIRMADA' } });
-    await tx.boleto.updateMany({ where: { compraId }, data: { estado: 'VIGENTE' } });
-  });
-
-  // Ocupar asientos en bus-api. Si falla, dejamos la compra confirmada
-  // y registramos el problema; un reintento manual o un job podrá resolverlo.
-  const boletosOrdenados = [...compra.boletos].sort((a, b) => a.id - b.id);
-  const asientosOrdenados = [...compra.asientos].sort((a, b) => a.id - b.id);
-
-  for (let i = 0; i < asientosOrdenados.length; i++) {
-    const ca = asientosOrdenados[i];
-    const boleto = boletosOrdenados[i];
-    if (!boleto) continue;
-    try {
-      await ocuparAsiento(ca.turnoId, ca.asientoId, boleto.id);
-      await prisma.compraAsiento.update({
-        where: { id: ca.id },
-        data: { estado: 'OCUPADO' },
-      });
-    } catch (err) {
-      console.error(`[webhook] no se pudo ocupar asiento ${ca.asientoId}:`, err);
-    }
   }
 }
 

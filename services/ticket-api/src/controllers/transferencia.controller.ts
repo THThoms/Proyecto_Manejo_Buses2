@@ -143,6 +143,39 @@ export const listarPendientes = async (_req: Request, res: Response) => {
 };
 
 /**
+ * US12: detalle del comprobante para la pantalla de revisión del oficinista.
+ * Devuelve la transferencia con su pago, compra (con asientos+boletos) y
+ * aprobación si ya fue procesada. Solo rol OFICINISTA.
+ */
+export const getDetalle = async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'id inválido' });
+  }
+
+  try {
+    const transferencia = await prisma.pagoTransferencia.findUnique({
+      where: { id },
+      include: {
+        aprobacion: true,
+        pago: {
+          include: {
+            compra: { include: { asientos: true, boletos: true } },
+          },
+        },
+      },
+    });
+    if (!transferencia) {
+      return res.status(404).json({ error: 'Transferencia no encontrada' });
+    }
+    return res.json(transferencia);
+  } catch (error) {
+    console.error('Error al obtener detalle de transferencia:', error);
+    return res.status(500).json({ error: 'Error interno al obtener el detalle' });
+  }
+};
+
+/**
  * US11 CA #4: sirve el archivo del comprobante. Solo rol OFICINISTA.
  * Recibe el ID del PagoTransferencia (no el del PagoPasajero).
  */
