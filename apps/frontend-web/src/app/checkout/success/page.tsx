@@ -49,9 +49,13 @@ export default function CheckoutSuccessPage() {
         const data: Compra = await res.json();
         if (cancelado) return;
         setCompra(data);
-        if (data.estado !== 'CONFIRMADA' && Date.now() - timerStart.current < POLL_TIMEOUT_MS) {
+        if (data.estado === 'CONFIRMADA') {
+          router.replace(`/boleto/${compraId}`);
+          return;
+        }
+        if (Date.now() - timerStart.current < POLL_TIMEOUT_MS) {
           setTimeout(tick, POLL_INTERVALO_MS);
-        } else if (data.estado !== 'CONFIRMADA') {
+        } else {
           setTimedOut(true);
         }
       } catch (err) {
@@ -65,7 +69,7 @@ export default function CheckoutSuccessPage() {
     return () => {
       cancelado = true;
     };
-  }, [compraId]);
+  }, [compraId, router]);
 
   if (error) {
     return (

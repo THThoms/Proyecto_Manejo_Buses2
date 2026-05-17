@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, ChangeEvent, FormEvent } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import styles from './transferencia.module.css';
 
 const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://localhost:3003';
@@ -18,6 +18,7 @@ interface Resultado {
 }
 
 export default function PagoTransferenciaPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const compraIdQuery = searchParams?.get('compraId') ?? '';
 
@@ -113,14 +114,16 @@ export default function PagoTransferenciaPage() {
         return;
       }
 
+      const compraIdResultado = data.compraId ?? Number(compraId.trim());
       setEstado('ok');
       setResultado({
-        compraId: data.compraId ?? Number(compraId.trim()),
+        compraId: compraIdResultado,
         pagoId: data.pagoId,
         transferenciaId: data.transferenciaId,
         estado: data.estado ?? 'PENDIENTE',
       });
       setMensaje('Comprobante enviado. Tu boleto queda pendiente de validación.');
+      router.push(`/boleto/${compraIdResultado}`);
     } catch (err) {
       setEstado('error');
       setMensaje(
