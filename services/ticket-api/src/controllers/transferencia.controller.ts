@@ -103,6 +103,7 @@ export const crearPagoTransferencia = async (req: Request, res: Response) => {
     });
 
     return res.status(201).json({
+      compraId,
       pagoId: resultado.pago.id,
       transferenciaId: resultado.transferencia.id,
       estado: resultado.transferencia.estado,
