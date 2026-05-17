@@ -6,7 +6,7 @@ jest.mock('../src/services/prisma', () => ({
   default: {
     compra: { findUnique: jest.fn(), update: jest.fn() },
     pagoPasajero: { create: jest.fn(), update: jest.fn() },
-    pagoEfectivo: { create: jest.fn() },
+    pagoEfectivo: { create: jest.fn(), findUnique: jest.fn() },
     boleto: { updateMany: jest.fn(), findMany: jest.fn() },
     compraAsiento: { update: jest.fn() },
     $transaction: jest.fn(),
@@ -247,5 +247,112 @@ describe('POST /pagos/efectivo/oficina', () => {
         data: expect.objectContaining({ vendedorId: 1 }),
       })
     );
+  });
+});
+
+describe('POST /pagos/efectivo/bus', () => {
+  const HEADERS_CHOFER = { 'x-user-role': 'CHOFER', 'x-user-id': '20' };
+
+  it('sin rol CHOFER → 403', async () => {
+    const res = await request(app)
+      .post('/pagos/efectivo/bus')
+      .send({ compraId: 70, montoRecibido: 10, offlineId: '123e4567-e89b-12d3-a456-426614174000' });
+    expect(res.status).toBe(403);
+  });
+
+  it('rol OFICINISTA en endpoint BUS → 403', async () => {
+    const res = await request(app)
+      .post('/pagos/efectivo/bus')
+      .set({ 'x-user-role': 'OFICINISTA', 'x-user-id': '9' })
+      .send({ compraId: 70, montoRecibido: 10, offlineId: '123e4567-e89b-12d3-a456-426614174000' });
+    expect(res.status).toBe(403);
+  });
+
+  it('compra inexistente → 404', async () => {
+    prismaMock.pagoEfectivo.findUnique.mockResolvedValue(null);
+    prismaMock.compra.findUnique.mockResolvedValue(null);
+    const res = await request(app)
+      .post('/pagos/efectivo/bus')
+      .set(HEADERS_CHOFER)
+      .send({ compraId: 999, montoRecibido: 10, offlineId: '123e4567-e89b-12d3-a456-426614174000' });
+    expect(res.status).toBe(404);
+  });
+
+  it('monto menor al total → 400', async () => {
+    prismaMock.pagoEfectivo.findUnique.mockResolvedValue(null);
+    prismaMock.compra.findUnique.mockResolvedValue(compraPendiente());
+    const res = await request(app)
+      .post('/pagos/efectivo/bus')
+      .set(HEADERS_CHOFER)
+      .send({ compraId: 70, montoRecibido: 3, offlineId: '123e4567-e89b-12d3-a456-426614174000' });
+    expect(res.status).toBe(400);
+  });
+
+  it('happy path: canalVenta BUS, crea PagoEfectivo con offlineId', async () => {
+    prismaMock.pagoEfectivo.findUnique.mockResolvedValue(null);
+    prismaMock.compra.findUnique.mockResolvedValue(compraPendiente());
+
+    const res = await request(app)
+      .post('/pagos/efectivo/bus')
+      .set(HEADERS_CHOFER)
+      .send({ compraId: 70, montoRecibido: 10, offlineId: '123e4567-e89b-12d3-a456-426614174000' });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      compraId: 70,
+      vendedorId: 20,
+      canalVenta: 'BUS',
+      cambio: 5,
+      isIdempotent: false,
+    });
+
+    expect(prismaMock.pagoEfectivo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          pagoId: 700,
+          vendedorId: 20,
+          montoRecibido: 10,
+          cambio: 5,
+          canalVenta: 'BUS',
+          turnoId: 12,
+          offlineId: '123e4567-e89b-12d3-a456-426614174000',
+        }),
+      })
+    );
+  });
+
+  it('offlineId duplicado no duplica venta, devuelve datos previos', async () => {
+    prismaMock.pagoEfectivo.findUnique.mockResolvedValue({
+      id: 800,
+      pagoId: 700,
+      vendedorId: 20,
+      montoRecibido: 10,
+      cambio: 5,
+      canalVenta: 'BUS',
+      turnoId: 12,
+      offlineId: '123e4567-e89b-12d3-a456-426614174000',
+      pago: {
+        compra: {
+          id: 70,
+          total: 5,
+          boletos: [
+            { id: 900, uuidQr: 'uuid-test-qr', estado: 'VIGENTE' }
+          ]
+        }
+      }
+    });
+
+    const res = await request(app)
+      .post('/pagos/efectivo/bus')
+      .set(HEADERS_CHOFER)
+      .send({ compraId: 70, montoRecibido: 10, offlineId: '123e4567-e89b-12d3-a456-426614174000' });
+
+    expect(res.status).toBe(200); // Idempotent OK
+    expect(res.body.isIdempotent).toBe(true);
+    expect(res.body.boletos.length).toBe(1);
+    
+    // NO debe crear otro pago
+    expect(prismaMock.pagoEfectivo.create).not.toHaveBeenCalled();
+    expect(prismaMock.compra.update).not.toHaveBeenCalled();
   });
 });
