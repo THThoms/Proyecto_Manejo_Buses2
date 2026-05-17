@@ -396,3 +396,138 @@
   gap: 10px;
   margin-top: 16px;
 }
+
+/* ---- Mejora US13 (Sprint): paneles de búsqueda ---- */
+
+.filtros {
+  max-width: 1200px;
+  margin: 0 auto 14px auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: flex-end;
+}
+
+.filtroCampo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  flex: 1 1 140px;
+}
+
+.filtroCampoSm {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+  flex: 0 0 140px;
+}
+
+.filtroLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.filtroInput,
+.filtroSelect {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+  font-family: inherit;
+  color: #111827;
+  background: #fff;
+  box-sizing: border-box;
+  height: 36px;
+}
+
+.filtroInput:focus,
+.filtroSelect:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.filtroAcciones {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  align-items: flex-end;
+}
+
+.filtroBtnPrim,
+.filtroBtnSec {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.filtroBtnPrim {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.filtroBtnPrim:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.filtroBtnSec {
+  background: #fff;
+  color: #4b5563;
+  border-color: #d1d5db;
+}
+
+.filtroBtnSec:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.filtroBtnPrim:disabled,
+.filtroBtnSec:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.contadorResultados {
+  max-width: 1200px;
+  margin: 0 auto 10px auto;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.sinResultados {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 640px) {
+  .filtroAcciones {
+    margin-left: 0;
+    width: 100%;
+  }
+  .filtroBtnPrim,
+  .filtroBtnSec {
+    flex: 1;
+  }
+}

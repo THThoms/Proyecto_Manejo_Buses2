@@ -9,7 +9,7 @@ jest.mock('../src/services/prisma', () => ({
     compra: { findUnique: jest.fn(), update: jest.fn() },
     boleto: { updateMany: jest.fn() },
     compraAsiento: { update: jest.fn() },
-    aprobacion: { create: jest.fn(), findMany: jest.fn() },
+    aprobacion: { create: jest.fn(), findMany: jest.fn(), count: jest.fn() },
     $transaction: jest.fn(),
   },
 }));
@@ -47,6 +47,7 @@ const HEADERS_OFICINISTA = { 'x-user-role': 'OFICINISTA', 'x-user-id': '7' };
 beforeEach(() => {
   jest.clearAllMocks();
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+  prismaMock.aprobacion.count.mockResolvedValue(0);
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'log').mockImplementation(() => {});
 });
@@ -333,5 +334,104 @@ describe('GET /aprobaciones (historial)', () => {
         },
       })
     );
+  });
+
+  // ----- Mejora US13 (Sprint): filtros operativos -----
+
+  it('filtra por estado=APROBADO sin tocar otros campos', async () => {
+    prismaMock.aprobacion.findMany.mockResolvedValue([]);
+    prismaMock.aprobacion.count.mockResolvedValue(3);
+
+    const res = await request(app)
+      .get('/aprobaciones?estado=APROBADO')
+      .set(HEADERS_OFICINISTA);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['x-total-count']).toBe('3');
+    expect(res.headers['x-page']).toBe('1');
+    expect(res.headers['x-limit']).toBe('50');
+    expect(prismaMock.aprobacion.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ estado: 'APROBADO' }),
+        skip: 0,
+        take: 50,
+      })
+    );
+    expect(prismaMock.aprobacion.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({ estado: 'APROBADO' }),
+    });
+  });
+
+  it('estado=TODOS no agrega filtro de estado al where', async () => {
+    prismaMock.aprobacion.findMany.mockResolvedValue([]);
+
+    const res = await request(app)
+      .get('/aprobaciones?estado=TODOS')
+      .set(HEADERS_OFICINISTA);
+
+    expect(res.status).toBe(200);
+    const callArg = prismaMock.aprobacion.findMany.mock.calls[0][0];
+    expect(callArg.where?.estado).toBeUndefined();
+  });
+
+  it('filtra por cedula → where.pagoTransferencia.pago.compra.boletos.some.cedulaPasajero', async () => {
+    prismaMock.aprobacion.findMany.mockResolvedValue([]);
+
+    const res = await request(app)
+      .get('/aprobaciones?cedula=0102030405')
+      .set(HEADERS_OFICINISTA);
+
+    expect(res.status).toBe(200);
+    const callArg = prismaMock.aprobacion.findMany.mock.calls[0][0];
+    expect(callArg.where).toEqual(
+      expect.objectContaining({
+        pagoTransferencia: {
+          pago: {
+            compra: {
+              boletos: { some: { cedulaPasajero: '0102030405' } },
+            },
+          },
+        },
+      })
+    );
+  });
+
+  it('filtra por rango de fechas → where.revisadoEn.gte y .lte', async () => {
+    prismaMock.aprobacion.findMany.mockResolvedValue([]);
+
+    const res = await request(app)
+      .get('/aprobaciones?fechaDesde=2024-11-01&fechaHasta=2024-11-30')
+      .set(HEADERS_OFICINISTA);
+
+    expect(res.status).toBe(200);
+    const callArg = prismaMock.aprobacion.findMany.mock.calls[0][0];
+    expect(callArg.where.revisadoEn.gte).toEqual(new Date('2024-11-01T00:00:00.000Z'));
+    expect(callArg.where.revisadoEn.lte).toEqual(new Date('2024-11-30T23:59:59.999Z'));
+  });
+
+  it('paginación page/limit se traduce a skip/take y expone headers', async () => {
+    prismaMock.aprobacion.findMany.mockResolvedValue([]);
+    prismaMock.aprobacion.count.mockResolvedValue(120);
+
+    const res = await request(app)
+      .get('/aprobaciones?page=3&limit=10')
+      .set(HEADERS_OFICINISTA);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['x-total-count']).toBe('120');
+    expect(res.headers['x-page']).toBe('3');
+    expect(res.headers['x-limit']).toBe('10');
+    expect(prismaMock.aprobacion.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 20, take: 10 })
+    );
+  });
+
+  it('limit por encima del máximo → 400', async () => {
+    const res = await request(app)
+      .get('/aprobaciones?limit=500')
+      .set(HEADERS_OFICINISTA);
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.aprobacion.findMany).not.toHaveBeenCalled();
   });
 });

@@ -18,15 +18,11 @@ interface SeatMapProps {
   isLoading?: boolean;
 }
 
-const SEAT_ICONS: Record<string, string> = {
-  DISPONIBLE: '🟢',
-  RESERVADO: '🟡',
-  OCUPADO: '🔴',
-  VACIO: '⚫',
-};
-
-const SEAT_LABELS: Record<string, string> = {
-  NORMAL: 'Asiento',
+const ESTADO_LABEL: Record<Asiento['estado'], string> = {
+  DISPONIBLE: 'Disponible',
+  RESERVADO: 'Reservado',
+  OCUPADO: 'Ocupado',
+  VACIO: 'No disponible',
 };
 
 export default function SeatMap({ turnoId, asientos, onSeatSelect, isLoading = false }: SeatMapProps) {
@@ -38,12 +34,11 @@ export default function SeatMap({ turnoId, asientos, onSeatSelect, isLoading = f
     onSeatSelect(asiento);
   };
 
-  // Agrupar asientos en filas de 4, pero si la última tiene 5, los agrupamos juntos
+  // Mejora US13 (Sprint): solo refactor visual. Misma lógica de filas que antes.
   const rows: Asiento[][] = [];
   let i = 0;
   while (i < asientos.length) {
     const remaining = asientos.length - i;
-    // Si quedan exactamente 5 asientos al final (común en buses), van en una sola fila sin pasillo
     if (remaining === 5) {
       rows.push(asientos.slice(i, i + 5));
       break;
@@ -65,13 +60,30 @@ export default function SeatMap({ turnoId, asientos, onSeatSelect, isLoading = f
     );
   }
 
+  const renderSeat = (asiento: Asiento) => (
+    <button
+      key={asiento.asientoId}
+      id={`seat-${asiento.numero}`}
+      className={`${styles.seat} ${styles[`seat_${asiento.estado}`]} ${
+        selectedId === asiento.asientoId ? styles.seat_SELECTED : ''
+      }`}
+      onClick={() => handleClick(asiento)}
+      disabled={asiento.estado !== 'DISPONIBLE'}
+      title={`Asiento ${asiento.numero} - ${ESTADO_LABEL[asiento.estado]}`}
+      aria-label={`Asiento ${asiento.numero}, ${ESTADO_LABEL[asiento.estado]}`}
+    >
+      <span className={styles.seatBack} aria-hidden="true" />
+      <span className={styles.seatNumber}>{asiento.numero}</span>
+    </button>
+  );
+
   return (
     <div className={styles.seatMapContainer}>
-      {/* Cabecera del bus */}
+      {/* Cabecera con contador y placa */}
       <div className={styles.busHeader}>
-        <div className={styles.busFront}>
-          <span className={styles.busIcon}>🚌</span>
-          <span className={styles.busFrontLabel}>FRENTE DEL BUS</span>
+        <div className={styles.busPlate}>
+          <span className={styles.busPlateLabel}>Bus · Turno</span>
+          <span className={styles.busPlateValue}>#{turnoId}</span>
         </div>
         <div className={styles.availability}>
           <span className={styles.availCount}>{disponibles}</span>
@@ -79,97 +91,77 @@ export default function SeatMap({ turnoId, asientos, onSeatSelect, isLoading = f
         </div>
       </div>
 
-      {/* Leyenda */}
+      {/* Leyenda con badges (sin emojis) */}
       <div className={styles.legend}>
-        {Object.entries(SEAT_ICONS).map(([estado, icon]) => (
-          <div key={estado} className={styles.legendItem}>
-            <span className={styles.legendIcon}>{icon}</span>
-            <span className={styles.legendLabel}>{estado.charAt(0) + estado.slice(1).toLowerCase()}</span>
-          </div>
-        ))}
+        <div className={styles.legendItem}>
+          <span className={`${styles.legendBadge} ${styles.legendBadgeDisponible}`} />
+          <span className={styles.legendLabel}>Disponible</span>
+        </div>
+        <div className={styles.legendItem}>
+          <span className={`${styles.legendBadge} ${styles.legendBadgeReservado}`} />
+          <span className={styles.legendLabel}>Reservado</span>
+        </div>
+        <div className={styles.legendItem}>
+          <span className={`${styles.legendBadge} ${styles.legendBadgeOcupado}`} />
+          <span className={styles.legendLabel}>Ocupado</span>
+        </div>
+        <div className={styles.legendItem}>
+          <span className={`${styles.legendBadge} ${styles.legendBadgeSeleccionado}`} />
+          <span className={styles.legendLabel}>Seleccionado</span>
+        </div>
       </div>
 
-      {/* Mapa de asientos (grilla del bus) */}
-      <div className={styles.busBody}>
-        {/* Etiqueta de conductor */}
-        <div className={styles.driverRow}>
-          <div className={styles.driverSeat}>🧑‍✈️ Chofer</div>
-          <div className={styles.aisle} />
+      {/* Carrocería del bus: frente curvo + cuerpo + asientos */}
+      <div className={styles.busShell}>
+        <div className={styles.windshield} aria-hidden="true">
+          <span className={styles.windshieldLabel}>Frente del bus</span>
         </div>
 
-        {rows.map((row, rowIdx) => (
-          <div key={rowIdx} className={styles.seatRow}>
-            {row.length === 5 ? (
-              // Fila final de 5 asientos (sin pasillo)
-              <div className={styles.seatGroup5}>
-                {row.map((asiento) => (
-                  <button
-                    key={asiento.asientoId}
-                    id={`seat-${asiento.numero}`}
-                    className={`${styles.seat} ${styles[`seat_${asiento.estado}`]} ${
-                      selectedId === asiento.asientoId ? styles.seat_SELECTED : ''
-                    }`}
-                    onClick={() => handleClick(asiento)}
-                    disabled={asiento.estado !== 'DISPONIBLE'}
-                    title={`Asiento ${asiento.numero} - ${asiento.estado}`}
-                    aria-label={`Asiento ${asiento.numero}, ${asiento.estado}`}
-                  >
-                    <span className={styles.seatNumber}>{asiento.numero}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              // Filas normales con pasillo
-              <>
-                <div className={styles.seatGroup}>
-                  {row.slice(0, 2).map((asiento) => (
-                    <button
-                      key={asiento.asientoId}
-                      id={`seat-${asiento.numero}`}
-                      className={`${styles.seat} ${styles[`seat_${asiento.estado}`]} ${
-                        selectedId === asiento.asientoId ? styles.seat_SELECTED : ''
-                      }`}
-                      onClick={() => handleClick(asiento)}
-                      disabled={asiento.estado !== 'DISPONIBLE'}
-                      title={`Asiento ${asiento.numero} - ${asiento.estado}`}
-                      aria-label={`Asiento ${asiento.numero}, ${asiento.estado}`}
-                    >
-                      <span className={styles.seatNumber}>{asiento.numero}</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className={styles.aisle}>
-                  <span className={styles.rowNumber}>{rowIdx + 1}</span>
-                </div>
-
-                <div className={styles.seatGroup}>
-                  {row.slice(2, 4).map((asiento) => (
-                    <button
-                      key={asiento.asientoId}
-                      id={`seat-${asiento.numero}`}
-                      className={`${styles.seat} ${styles[`seat_${asiento.estado}`]} ${
-                        selectedId === asiento.asientoId ? styles.seat_SELECTED : ''
-                      }`}
-                      onClick={() => handleClick(asiento)}
-                      disabled={asiento.estado !== 'DISPONIBLE'}
-                      title={`Asiento ${asiento.numero} - ${asiento.estado}`}
-                      aria-label={`Asiento ${asiento.numero}, ${asiento.estado}`}
-                    >
-                      <span className={styles.seatNumber}>{asiento.numero}</span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+        <div className={styles.driverDock}>
+          <div className={styles.driverArea}>
+            <div className={styles.steeringWheel} aria-hidden="true">
+              <span className={styles.steeringWheelHub} />
+            </div>
+            <span className={styles.driverLabel}>Conductor</span>
           </div>
-        ))}
+          <div className={styles.driverGap} />
+          <div className={styles.busDoor} aria-label="Puerta de acceso">
+            <span className={styles.doorStripes} aria-hidden="true" />
+            <span className={styles.doorLabel}>Puerta</span>
+          </div>
+        </div>
+
+        <div className={styles.busBody}>
+          {rows.map((row, rowIdx) => (
+            <div key={rowIdx} className={styles.seatRow}>
+              {row.length === 5 ? (
+                <div className={styles.seatGroup5}>
+                  {row.map((asiento) => renderSeat(asiento))}
+                </div>
+              ) : (
+                <>
+                  <div className={styles.seatGroup}>{row.slice(0, 2).map(renderSeat)}</div>
+
+                  <div className={styles.aisle} aria-hidden="true">
+                    <span className={styles.rowNumber}>{rowIdx + 1}</span>
+                  </div>
+
+                  <div className={styles.seatGroup}>{row.slice(2, 4).map(renderSeat)}</div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className={styles.busRear} aria-hidden="true">
+          <span className={styles.busRearLabel}>Fondo</span>
+        </div>
       </div>
 
-      {/* Selección actual */}
       {selectedId && (
         <div className={styles.selectionBanner}>
-          ✅ Asiento <strong>#{asientos.find((a) => a.asientoId === selectedId)?.numero}</strong> seleccionado
+          Asiento <strong>#{asientos.find((a) => a.asientoId === selectedId)?.numero}</strong>{' '}
+          seleccionado
         </div>
       )}
     </div>
