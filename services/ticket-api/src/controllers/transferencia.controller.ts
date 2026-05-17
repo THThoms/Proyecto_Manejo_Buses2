@@ -74,7 +74,7 @@ export const crearPagoTransferencia = async (req: Request, res: Response) => {
     // URL relativa que solo se sirve via GET /pagos/transferencia/:id/comprobante.
     const comprobanteUrl = path.posix.join('/comprobantes', path.basename(file.path));
 
-    const resultado = await prisma.$transaction(async (tx) => {
+    const resultado = await prisma.$transaction(async (tx: any) => {
       const pago = compra.pago
         ? await tx.pagoPasajero.update({
             where: { id: compra.pago.id },

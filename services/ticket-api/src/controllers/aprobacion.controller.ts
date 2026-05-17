@@ -56,7 +56,7 @@ export const aprobar = async (req: Request, res: Response) => {
         .json({ error: `Transferencia ya está en estado ${transferencia.estado}` });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.aprobacion.create({
         data: {
           pagoTransferenciaId: id,
@@ -131,7 +131,7 @@ export const rechazar = async (req: Request, res: Response) => {
     const pagoId = transferencia.pagoId;
     const asientos = transferencia.pago.compra.asientos;
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.aprobacion.create({
         data: {
           pagoTransferenciaId: id,

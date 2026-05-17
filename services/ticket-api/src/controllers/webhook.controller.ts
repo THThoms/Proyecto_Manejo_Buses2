@@ -145,7 +145,7 @@ async function manejarFallo(event: Stripe.Event) {
     return;
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     await tx.pagoPasajero.update({
       where: { id: pagoId },
       data: { estado: 'RECHAZADO' },

@@ -25,7 +25,7 @@ export async function confirmarPagoYOcuparAsientos(
   });
   if (!compra) return null;
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     await tx.pagoPasajero.update({
       where: { id: pagoId },
       data: { estado: 'APROBADO', pagadoEn: new Date() },

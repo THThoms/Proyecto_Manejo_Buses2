@@ -67,7 +67,7 @@ export const crearCompra = async (req: Request, res: Response) => {
 
     const expiraEn = new Date(Date.now() + EXPIRACION_BOLETO_HORAS * 60 * 60 * 1000);
 
-    const compra = await prisma.$transaction(async (tx) => {
+    const compra = await prisma.$transaction(async (tx: any) => {
       const nuevaCompra = await tx.compra.create({
         data: {
           usuarioId: body.usuarioId,
