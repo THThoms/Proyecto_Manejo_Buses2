@@ -139,3 +139,38 @@ export const listarTurnos = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Error al listar turnos' });
   }
 };
+
+/**
+ * US15: detalle de un turno por id. Usado por ticket-api al generar el PDF
+ * del boleto para llenar ruta + hora de salida + bus.
+ */
+export const getTurnoById = async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'id inválido' });
+  }
+  try {
+    const turno = await prisma.turno.findUnique({
+      where: { id },
+      include: {
+        ruta: { select: { id: true, nombre: true, origen: true, destino: true } },
+        bus: { select: { id: true, placa: true, marca: true } },
+      },
+    });
+    if (!turno) {
+      return res.status(404).json({ error: 'Turno no encontrado' });
+    }
+    return res.json({
+      id: turno.id,
+      fecha: turno.fecha,
+      horaInicio: turno.horaInicio,
+      horaFin: turno.horaFin,
+      estado: turno.estado,
+      ruta: turno.ruta,
+      bus: turno.bus,
+    });
+  } catch (error) {
+    console.error('Error al obtener turno:', error);
+    return res.status(500).json({ error: 'Error interno al obtener turno' });
+  }
+};
