@@ -160,6 +160,14 @@ export default function CheckoutPage() {
             >
               Pagar por transferencia
             </button>
+            <button
+              className={styles.secondaryBtn}
+              onClick={() => router.push(`/pago/efectivo?compraId=${compra.id}`)}
+              disabled={paying}
+              style={{ marginTop: 10, background: '#10b981', color: '#ffffff', border: 'none' }}
+            >
+              Pago en Efectivo
+            </button>
           </>
         )}
       </div>

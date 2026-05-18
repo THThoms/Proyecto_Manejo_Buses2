@@ -276,3 +276,123 @@ export const cobrarEnBus = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Error interno al registrar el cobro' });
   }
 };
+
+const cobrarCustomSchema = z.object({
+  compraId: z.number().int().positive(),
+  montoRecibido: z.number().positive(),
+  nuevoTotal: z.number().positive().optional(),
+  origen: z.string().min(1).optional(),
+  destino: z.string().min(1).optional(),
+});
+
+/**
+ * US14+: Cobro personalizado en efectivo con origen, destino y cambio manual de tarifa.
+ */
+export const cobrarEfectivoPersonalizado = async (req: Request, res: Response) => {
+  const parsed = cobrarCustomSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Body inválido', detalles: parsed.error.flatten() });
+  }
+  const { compraId, montoRecibido, nuevoTotal, origen, destino } = parsed.data;
+  const vendedorId = getVendedorId(req);
+
+  try {
+    const compra = await prisma.compra.findUnique({
+      where: { id: compraId },
+      include: { pago: true },
+    });
+    if (!compra) {
+      return res.status(404).json({ error: 'Compra no encontrada' });
+    }
+    if (compra.estado !== 'PENDIENTE') {
+      return res.status(409).json({ error: `La compra está en estado ${compra.estado}` });
+    }
+    if (compra.pago && compra.pago.estado === 'APROBADO') {
+      return res.status(409).json({ error: 'La compra ya tiene un pago aprobado' });
+    }
+
+    const totalOriginal = Number(compra.total);
+    const finalTotal = nuevoTotal !== undefined ? nuevoTotal : totalOriginal;
+
+    if (montoRecibido < finalTotal) {
+      return res.status(400).json({
+        error: 'Monto recibido insuficiente',
+        montoRecibido,
+        total: finalTotal,
+      });
+    }
+    const cambio = redondear2(montoRecibido - finalTotal);
+
+    const { pago, pagoEfectivo } = await prisma.$transaction(async (tx: any) => {
+      // 1. Actualizar Compra si tiene nuevo total, origen o destino
+      await tx.compra.update({
+        where: { id: compraId },
+        data: {
+          total: finalTotal,
+          origen: origen || null,
+          destino: destino || null,
+        },
+      });
+
+      // 2. Crear o actualizar PagoPasajero
+      const pagoBase = compra.pago
+        ? await tx.pagoPasajero.update({
+            where: { id: compra.pago.id },
+            data: { metodo: 'EFECTIVO', estado: 'PENDIENTE', monto: finalTotal },
+          })
+        : await tx.pagoPasajero.create({
+            data: {
+              compraId: compra.id,
+              monto: finalTotal,
+              metodo: 'EFECTIVO',
+              estado: 'PENDIENTE',
+            },
+          });
+
+      // 3. Crear PagoEfectivo
+      const pagoEf = await tx.pagoEfectivo.create({
+        data: {
+          pagoId: pagoBase.id,
+          vendedorId,
+          montoRecibido,
+          cambio,
+          canalVenta: 'OFICINA',
+          turnoId: compra.turnoId,
+        },
+      });
+
+      return { pago: pagoBase, pagoEfectivo: pagoEf };
+    });
+
+    const resultado = await confirmarPagoYOcuparAsientos(compra.id, pago.id);
+
+    const boletos = await prisma.boleto.findMany({
+      where: { compraId: compra.id },
+      select: {
+        id: true,
+        uuidQr: true,
+        nombrePasajero: true,
+        cedulaPasajero: true,
+        tipoTarifa: true,
+        estado: true,
+      },
+    });
+
+    return res.status(201).json({
+      compraId: compra.id,
+      pagoId: pago.id,
+      pagoEfectivoId: pagoEfectivo.id,
+      vendedorId,
+      canalVenta: 'OFICINA',
+      turnoId: compra.turnoId,
+      total: finalTotal,
+      montoRecibido,
+      cambio,
+      asientosOcupados: resultado?.asientosOcupados ?? 0,
+      boletos,
+    });
+  } catch (error) {
+    console.error('Error al cobrar efectivo personalizado:', error);
+    return res.status(500).json({ error: 'Error interno al registrar el cobro' });
+  }
+};

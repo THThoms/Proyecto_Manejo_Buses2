@@ -22,6 +22,8 @@ model Compra {
   total       Decimal       @db.Decimal(10, 2)
   canal       CanalVenta
   estado      EstadoCompra  @default(PENDIENTE)
+  origen      String?
+  destino     String?
   creadoEn    DateTime      @default(now()) @map("creado_en")
 
   boletos  Boleto[]
