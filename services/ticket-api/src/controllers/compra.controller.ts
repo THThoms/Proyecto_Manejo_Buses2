@@ -187,7 +187,7 @@ export const obtenerResumen = async (req: Request, res: Response) => {
       fechaViaje: compra.fechaViaje,
       turnoId: compra.turnoId,
       frecuenciaId: compra.frecuenciaId,
-      boletos: compra.boletos.map((b) => ({
+      boletos: compra.boletos.map((b: any) => ({
         id: b.id,
         estado: b.estado,
         nombrePasajero: b.nombrePasajero,
@@ -196,7 +196,7 @@ export const obtenerResumen = async (req: Request, res: Response) => {
         uuidQr: b.uuidQr,
         expiraEn: b.expiraEn,
       })),
-      asientos: compra.asientos.map((a) => ({
+      asientos: compra.asientos.map((a: any) => ({
         id: a.id,
         asientoId: a.asientoId,
         turnoId: a.turnoId,

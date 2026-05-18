@@ -37,6 +37,21 @@ export default function AsientosPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorSubmit, setErrorSubmit] = useState<string | null>(null);
 
+  const getPrecioTarifa = (tarifa: TipoTarifa): number => {
+    switch (tarifa) {
+      case 'NORMAL':
+        return 15.50;
+      case 'TERCERA_EDAD':
+        return 9.00;
+      case 'DISCAPACIDAD':
+        return 10.00;
+      case 'MENOR':
+        return 7.50;
+      default:
+        return 15.50;
+    }
+  };
+
   useEffect(() => {
     if (!Number.isFinite(turnoId)) {
       setErrorAsientos('turnoId inválido');
@@ -94,7 +109,7 @@ export default function AsientosPage() {
           frecuenciaId: rutaId,
           turnoId,
           fechaViaje: fecha,
-          total: precio,
+          total: getPrecioTarifa(tipoTarifa),
           canal: 'WEB',
           asientos: [
             {
@@ -195,7 +210,7 @@ export default function AsientosPage() {
             <div>
               <span className={styles.summaryLabel}>Total</span>
               <span className={styles.summaryValue}>
-                {new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(precio)}
+                {new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(getPrecioTarifa(tipoTarifa))}
               </span>
             </div>
           </div>

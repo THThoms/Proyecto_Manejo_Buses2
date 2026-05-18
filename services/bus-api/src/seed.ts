@@ -34,8 +34,10 @@ async function main() {
   console.log('Dueño creado:', dueno.nombre);
 
   // 3. Crear Bus de prueba
-  const bus = await prisma.bus.create({
-    data: {
+  const bus = await prisma.bus.upsert({
+    where: { placa: 'ABC-1234' },
+    update: {},
+    create: {
       placa: 'ABC-1234',
       marca: 'Hino',
       carroceria: 'Cepeda',
@@ -49,10 +51,23 @@ async function main() {
       estado: 'ACTIVO',
     },
   });
-  console.log('Bus creado con placa:', bus.placa);
+  console.log('Bus creado/encontrado con placa:', bus.placa);
+
+  // Crear asientos del bus si no existen
+  const asientosCount = await prisma.asiento.count({ where: { busId: bus.id } });
+  if (asientosCount === 0) {
+    const asientosData = Array.from({ length: 45 }, (_, idx) => ({
+      busId: bus.id,
+      numero: idx + 1,
+      tipo: 'NORMAL' as const,
+      estado: 'ACTIVO' as const,
+    }));
+    await prisma.asiento.createMany({ data: asientosData });
+  }
 
   // 4. Crear Ruta de prueba
-  const ruta = await prisma.ruta.create({
+  const ruta = await prisma.ruta.findFirst({ where: { nombre: 'Quito - Guayaquil (Directo)' } }) 
+    || await prisma.ruta.create({
     data: {
       nombre: 'Quito - Guayaquil (Directo)',
       origen: 'Quito',
@@ -61,21 +76,49 @@ async function main() {
       precioPasaje: 15.50,
     },
   });
-  console.log('Ruta creada:', ruta.nombre);
+  console.log('Ruta creada/encontrada:', ruta.nombre);
 
-  // 5. Crear Frecuencia de prueba
-  const frecuencia = await prisma.frecuencia.create({
-    data: {
-      rutaId: ruta.id,
-      busId: bus.id,
-      diaSemana: 'LUN',
-      horaSalida: '08:00',
-      horaLlegada: '16:00',
-      resolucion: 'ANT-2024-001',
-    },
+  // 5. Crear Chofer
+  const chofer = await prisma.chofer.findFirst() || await prisma.chofer.create({
+    data: { nombre: 'Chofer QG', cedula: '1799999999', licencia: '1799999999', tipoLicencia: 'E', estado: 'ACTIVO' }
   });
-  console.log('Frecuencia creada con resolución:', frecuencia.resolucion);
 
+  // 6. Crear Turnos (Hoy y mañana)
+  const fechas = [new Date(), new Date(new Date().setDate(new Date().getDate() + 1))];
+  
+  for (const fecha of fechas) {
+    fecha.setUTCHours(0, 0, 0, 0);
+    const turnosData = [
+      { horaInicio: '08:00', horaFin: '16:00' },
+      { horaInicio: '12:00', horaFin: '20:00' },
+      { horaInicio: '20:00', horaFin: '04:00' }
+    ];
+
+    for (const t of turnosData) {
+      const turno = await prisma.turno.create({
+        data: {
+          busId: bus.id,
+          rutaId: ruta.id,
+          choferId: chofer.id,
+          fecha: fecha,
+          horaInicio: t.horaInicio,
+          estado: 'PENDIENTE',
+        }
+      });
+
+      // Asientos del turno
+      const asientos = await prisma.asiento.findMany({ where: { busId: bus.id } });
+      await prisma.asientoTurno.createMany({
+        data: asientos.map(a => ({
+          turnoId: turno.id,
+          asientoId: a.id,
+          estado: 'DISPONIBLE'
+        }))
+      });
+    }
+  }
+
+  console.log('Turnos para Quito - Guayaquil creados exitosamente.');
   console.log('¡Seed completado con éxito!');
 }
 

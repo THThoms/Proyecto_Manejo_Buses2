@@ -22,6 +22,8 @@ model Compra {
   total       Decimal       @db.Decimal(10, 2)
   canal       CanalVenta
   estado      EstadoCompra  @default(PENDIENTE)
+  origen      String?
+  destino     String?
   creadoEn    DateTime      @default(now()) @map("creado_en")
 
   boletos  Boleto[]
@@ -140,6 +142,7 @@ model PagoEfectivo {
   cambio        Decimal    @db.Decimal(10, 2)
   canalVenta    CanalEfectivo @map("canal_venta")
   turnoId       Int?       @map("turno_id")      // Bus Service, solo si es BUS
+  offlineId     String?    @unique @map("offline_id") // Para idempotencia en PWA offline
 
   pago PagoPasajero @relation(fields: [pagoId], references: [id])
 

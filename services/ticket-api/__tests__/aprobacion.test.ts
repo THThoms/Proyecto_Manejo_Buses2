@@ -5,7 +5,7 @@ jest.mock('../src/services/prisma', () => ({
   __esModule: true,
   default: {
     pagoTransferencia: { findUnique: jest.fn(), update: jest.fn() },
-    pagoPasajero: { update: jest.fn() },
+    pagoPasajero: { update: jest.fn(), findMany: jest.fn() },
     compra: { findUnique: jest.fn(), update: jest.fn() },
     boleto: { updateMany: jest.fn() },
     compraAsiento: { update: jest.fn() },
@@ -50,6 +50,263 @@ beforeEach(() => {
   prismaMock.aprobacion.count.mockResolvedValue(0);
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'log').mockImplementation(() => {});
+});
+
+describe('GET /aprobaciones/historial-pagos', () => {
+  it('sin rol -> 403', async () => {
+    const res = await request(app).get('/aprobaciones/historial-pagos');
+    expect(res.status).toBe(403);
+  });
+
+  it('devuelve historial unificado de transferencia, tarjeta y efectivo', async () => {
+    prismaMock.pagoPasajero.findMany.mockResolvedValue([
+      {
+        id: 10,
+        compraId: 50,
+        monto: '5.50',
+        metodo: 'TRANSFERENCIA',
+        estado: 'APROBADO',
+        pagadoEn: null,
+        compra: {
+          id: 50,
+          total: '5.50',
+          canal: 'WEB',
+          estado: 'CONFIRMADA',
+          fechaViaje: '2024-11-09',
+          turnoId: 7,
+          creadoEn: '2024-11-01T09:00:00.000Z',
+          boletos: [
+            {
+              id: 70,
+              nombrePasajero: 'Ana Perez',
+              cedulaPasajero: '0102030405',
+              estado: 'VIGENTE',
+              uuidQr: 'qr-ana',
+            },
+          ],
+        },
+        pagoTransferencia: {
+          id: 600,
+          banco: 'Pichincha',
+          referencia: 'TRX-001',
+          estado: 'APROBADO',
+          creadoEn: '2024-11-01T10:00:00.000Z',
+          aprobacion: {
+            id: 1,
+            pagoTransferenciaId: 600,
+            oficinistaId: 7,
+            estado: 'APROBADO',
+            observacion: 'Validado por caja',
+            revisadoEn: '2024-11-01T11:00:00.000Z',
+          },
+        },
+        pagoTarjeta: null,
+        pagoEfectivo: null,
+      },
+      {
+        id: 11,
+        compraId: 51,
+        monto: '8.00',
+        metodo: 'TARJETA',
+        estado: 'APROBADO',
+        pagadoEn: '2024-11-02T10:30:00.000Z',
+        compra: {
+          id: 51,
+          total: '8.00',
+          canal: 'WEB',
+          estado: 'CONFIRMADA',
+          fechaViaje: '2024-11-10',
+          turnoId: 8,
+          creadoEn: '2024-11-02T09:50:00.000Z',
+          boletos: [
+            {
+              id: 71,
+              nombrePasajero: 'Luis Mora',
+              cedulaPasajero: '0203040506',
+              estado: 'VIGENTE',
+              uuidQr: 'qr-luis',
+            },
+          ],
+        },
+        pagoTransferencia: null,
+        pagoTarjeta: {
+          id: 710,
+          marca: 'VISA',
+          ultimos4: '4242',
+          referenciaPasarela: 'pi_123',
+        },
+        pagoEfectivo: null,
+      },
+      {
+        id: 12,
+        compraId: 52,
+        monto: '6.00',
+        metodo: 'EFECTIVO',
+        estado: 'APROBADO',
+        pagadoEn: '2024-11-03T08:15:00.000Z',
+        compra: {
+          id: 52,
+          total: '6.00',
+          canal: 'OFICINISTA',
+          estado: 'CONFIRMADA',
+          fechaViaje: '2024-11-11',
+          turnoId: 9,
+          creadoEn: '2024-11-03T08:00:00.000Z',
+          boletos: [
+            {
+              id: 72,
+              nombrePasajero: 'Marta Silva',
+              cedulaPasajero: '0304050607',
+              estado: 'VIGENTE',
+              uuidQr: 'qr-marta',
+            },
+          ],
+        },
+        pagoTransferencia: null,
+        pagoTarjeta: null,
+        pagoEfectivo: {
+          id: 810,
+          vendedorId: 1,
+          montoRecibido: '10.00',
+          cambio: '4.00',
+          canalVenta: 'OFICINA',
+          turnoId: 9,
+          offlineId: null,
+        },
+      },
+    ]);
+
+    const res = await request(app)
+      .get('/aprobaciones/historial-pagos')
+      .set(HEADERS_OFICINISTA);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['x-total-count']).toBe('3');
+    expect(res.body).toHaveLength(3);
+    expect(res.body[0]).toMatchObject({
+      compraId: 52,
+      metodoPago: 'EFECTIVO',
+      estado: 'APROBADO',
+      efectivo: { canalVenta: 'OFICINA', cambio: '4.00' },
+    });
+    expect(res.body[1]).toMatchObject({
+      compraId: 51,
+      metodoPago: 'TARJETA',
+      tarjeta: { marca: 'VISA', ultimos4: '4242' },
+    });
+    expect(res.body[2]).toMatchObject({
+      compraId: 50,
+      metodoPago: 'TRANSFERENCIA',
+      transferencia: { banco: 'Pichincha', referencia: 'TRX-001', oficinistaId: 7 },
+    });
+  });
+
+  it('filtra por metodoPago y cedula en el where base', async () => {
+    prismaMock.pagoPasajero.findMany.mockResolvedValue([]);
+
+    const res = await request(app)
+      .get('/aprobaciones/historial-pagos?metodoPago=EFECTIVO&cedula=0102030405')
+      .set(HEADERS_OFICINISTA);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.pagoPasajero.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          metodo: 'EFECTIVO',
+          compra: {
+            boletos: { some: { cedulaPasajero: '0102030405' } },
+          },
+        },
+      })
+    );
+  });
+
+  it('filtra por fechas sobre la fecha de referencia normalizada', async () => {
+    prismaMock.pagoPasajero.findMany.mockResolvedValue([
+      {
+        id: 10,
+        compraId: 50,
+        monto: '5.50',
+        metodo: 'TRANSFERENCIA',
+        estado: 'APROBADO',
+        pagadoEn: null,
+        compra: {
+          id: 50,
+          total: '5.50',
+          canal: 'WEB',
+          estado: 'CONFIRMADA',
+          fechaViaje: '2024-11-09',
+          turnoId: 7,
+          creadoEn: '2024-11-01T09:00:00.000Z',
+          boletos: [],
+        },
+        pagoTransferencia: {
+          id: 600,
+          banco: 'Pichincha',
+          referencia: 'TRX-001',
+          estado: 'APROBADO',
+          creadoEn: '2024-11-01T10:00:00.000Z',
+          aprobacion: {
+            id: 1,
+            pagoTransferenciaId: 600,
+            oficinistaId: 7,
+            estado: 'APROBADO',
+            observacion: 'Validado por caja',
+            revisadoEn: '2024-11-01T11:00:00.000Z',
+          },
+        },
+        pagoTarjeta: null,
+        pagoEfectivo: null,
+      },
+      {
+        id: 12,
+        compraId: 52,
+        monto: '6.00',
+        metodo: 'EFECTIVO',
+        estado: 'APROBADO',
+        pagadoEn: '2024-11-03T08:15:00.000Z',
+        compra: {
+          id: 52,
+          total: '6.00',
+          canal: 'OFICINISTA',
+          estado: 'CONFIRMADA',
+          fechaViaje: '2024-11-11',
+          turnoId: 9,
+          creadoEn: '2024-11-03T08:00:00.000Z',
+          boletos: [],
+        },
+        pagoTransferencia: null,
+        pagoTarjeta: null,
+        pagoEfectivo: {
+          id: 810,
+          vendedorId: 1,
+          montoRecibido: '10.00',
+          cambio: '4.00',
+          canalVenta: 'OFICINA',
+          turnoId: 9,
+          offlineId: null,
+        },
+      },
+    ]);
+
+    const res = await request(app)
+      .get('/aprobaciones/historial-pagos?fechaDesde=2024-11-02&fechaHasta=2024-11-04')
+      .set(HEADERS_OFICINISTA);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['x-total-count']).toBe('1');
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toMatchObject({ compraId: 52, metodoPago: 'EFECTIVO' });
+  });
+
+  it('limit por encima del maximo -> 400', async () => {
+    const res = await request(app)
+      .get('/aprobaciones/historial-pagos?limit=500')
+      .set(HEADERS_OFICINISTA);
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.pagoPasajero.findMany).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /pagos/transferencia/:id/aprobar', () => {

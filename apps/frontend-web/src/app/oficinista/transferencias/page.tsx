@@ -8,8 +8,8 @@ const AUTH_HEADERS = { 'X-User-Role': 'OFICINISTA', 'X-User-Id': '1' };
 const MIN_MOTIVO = 5;
 
 type Tab = 'pendientes' | 'historial';
-
-type EstadoHistorialFiltro = 'TODOS' | 'APROBADO' | 'RECHAZADO';
+type EstadoHistorialFiltro = 'TODOS' | 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+type MetodoPagoHistorialFiltro = 'TODOS' | 'TRANSFERENCIA' | 'TARJETA' | 'EFECTIVO';
 
 interface FiltrosPendientes {
   cedula: string;
@@ -17,6 +17,7 @@ interface FiltrosPendientes {
 
 interface FiltrosHistorial {
   estado: EstadoHistorialFiltro;
+  metodoPago: MetodoPagoHistorialFiltro;
   cedula: string;
   fechaDesde: string;
   fechaHasta: string;
@@ -25,24 +26,58 @@ interface FiltrosHistorial {
 const FILTROS_PENDIENTES_VACIO: FiltrosPendientes = { cedula: '' };
 const FILTROS_HISTORIAL_VACIO: FiltrosHistorial = {
   estado: 'TODOS',
+  metodoPago: 'TODOS',
   cedula: '',
   fechaDesde: '',
   fechaHasta: '',
 };
 
 function maskCedula(cedula: string | null | undefined): string {
-  if (!cedula) return '—';
+  if (!cedula) return '-';
   if (cedula.length <= 4) return '***';
   return `${cedula.slice(0, 2)}${'*'.repeat(Math.max(0, cedula.length - 4))}${cedula.slice(-2)}`;
 }
 
 function buildQueryString(params: Record<string, string | undefined>): string {
   const search = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v && v.trim()) search.set(k, v.trim());
+  for (const [key, value] of Object.entries(params)) {
+    if (value && value.trim()) search.set(key, value.trim());
   }
-  const qs = search.toString();
-  return qs ? `?${qs}` : '';
+  const query = search.toString();
+  return query ? `?${query}` : '';
+}
+
+function formatMetodoPago(metodoPago: MetodoPagoHistorialFiltro | string): string {
+  switch (metodoPago) {
+    case 'TRANSFERENCIA':
+      return 'Transferencia';
+    case 'TARJETA':
+      return 'Tarjeta';
+    case 'EFECTIVO':
+      return 'Efectivo';
+    default:
+      return metodoPago;
+  }
+}
+
+function formatCanalVenta(canalVenta: string | null | undefined): string {
+  if (!canalVenta) return '-';
+  switch (canalVenta) {
+    case 'OFICINISTA':
+      return 'Oficina';
+    case 'OFICINA':
+      return 'Oficina';
+    case 'OFICIAL':
+      return 'Bus';
+    default:
+      return canalVenta;
+  }
+}
+
+function formatFecha(fecha: string | null | undefined): string {
+  if (!fecha) return '-';
+  const parsed = new Date(fecha);
+  return Number.isNaN(parsed.getTime()) ? '-' : parsed.toLocaleString();
 }
 
 interface Pendiente {
@@ -75,41 +110,110 @@ interface Detalle {
   };
 }
 
-interface AprobacionHist {
+interface HistorialPago {
   id: number;
-  pagoTransferenciaId: number;
-  oficinistaId: number;
-  estado: 'APROBADO' | 'RECHAZADO';
-  observacion: string | null;
-  revisadoEn: string;
-  pagoTransferencia: { banco: string; referencia: string; pago: { compra: { id: number; total: string } } };
+  pagoId: number;
+  compraId: number;
+  metodoPago: 'TRANSFERENCIA' | 'TARJETA' | 'EFECTIVO';
+  estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+  total: string;
+  fechaReferencia: string | null;
+  fechaViaje: string | null;
+  turnoId: number | null;
+  compraEstado: string | null;
+  canalVenta: string | null;
+  pasajeroPrincipal: string | null;
+  cedulaPrincipal: string | null;
+  boletos: {
+    id: number;
+    nombrePasajero: string;
+    cedulaPasajero: string;
+    estado: string;
+    uuidQr: string;
+  }[];
+  transferencia: {
+    id: number;
+    banco: string;
+    referencia: string;
+    estado: string;
+    creadoEn: string;
+    revisadoEn: string | null;
+    oficinistaId: number | null;
+    observacion: string | null;
+  } | null;
+  tarjeta: {
+    id: number;
+    marca: string;
+    ultimos4: string;
+    referenciaPasarela: string;
+  } | null;
+  efectivo: {
+    id: number;
+    vendedorId: number;
+    montoRecibido: string;
+    cambio: string;
+    canalVenta: string;
+    turnoId: number | null;
+    offlineId: string | null;
+  } | null;
+}
+
+function buildDetallePago(item: HistorialPago): string {
+  if (item.transferencia) {
+    const extras = [
+      item.transferencia.banco,
+      item.transferencia.referencia,
+      item.transferencia.observacion,
+    ].filter(Boolean);
+    return extras.join(' · ');
+  }
+  if (item.tarjeta) {
+    return `${item.tarjeta.marca} ****${item.tarjeta.ultimos4}`;
+  }
+  if (item.efectivo) {
+    return `Cambio $${Number(item.efectivo.cambio).toFixed(2)} · ${formatCanalVenta(item.efectivo.canalVenta)}`;
+  }
+  return '-';
+}
+
+function getEstadoClass(estado: HistorialPago['estado'] | 'APROBADO' | 'RECHAZADO') {
+  if (estado === 'APROBADO') return styles.badgeOk;
+  if (estado === 'RECHAZADO') return styles.badgeFail;
+  return styles.badgeWarn;
+}
+
+function getMetodoClass(metodoPago: HistorialPago['metodoPago']) {
+  if (metodoPago === 'EFECTIVO') return styles.badgeMetodoCash;
+  if (metodoPago === 'TARJETA') return styles.badgeMetodoCard;
+  return styles.badgeMetodoTransfer;
 }
 
 export default function OficinistaTransferenciasPage() {
   const [tab, setTab] = useState<Tab>('pendientes');
   const [pendientes, setPendientes] = useState<Pendiente[]>([]);
-  const [historial, setHistorial] = useState<AprobacionHist[]>([]);
+  const [historial, setHistorial] = useState<HistorialPago[]>([]);
   const [totalPendientes, setTotalPendientes] = useState<number | null>(null);
   const [totalHistorial, setTotalHistorial] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detalle, setDetalle] = useState<Detalle | null>(null);
   const [comprobanteUrl, setComprobanteUrl] = useState<string | null>(null);
-  const [comprobanteMime, setComprobanteMime] = useState<string>('');
+  const [comprobanteMime, setComprobanteMime] = useState('');
   const [cargando, setCargando] = useState(false);
   const [accion, setAccion] = useState<'idle' | 'aprobando' | 'rechazando'>('idle');
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [motivo, setMotivo] = useState('');
 
-  // Mejora US13 (Sprint): filtros de búsqueda. Los activos se aplican al
-  // backend; los pending son lo que el oficinista está editando en el form.
-  const [filtrosPendientesActivos, setFiltrosPendientesActivos] = useState<FiltrosPendientes>(FILTROS_PENDIENTES_VACIO);
-  const [filtrosPendientesForm, setFiltrosPendientesForm] = useState<FiltrosPendientes>(FILTROS_PENDIENTES_VACIO);
-  const [filtrosHistorialActivos, setFiltrosHistorialActivos] = useState<FiltrosHistorial>(FILTROS_HISTORIAL_VACIO);
-  const [filtrosHistorialForm, setFiltrosHistorialForm] = useState<FiltrosHistorial>(FILTROS_HISTORIAL_VACIO);
+  const [filtrosPendientesActivos, setFiltrosPendientesActivos] =
+    useState<FiltrosPendientes>(FILTROS_PENDIENTES_VACIO);
+  const [filtrosPendientesForm, setFiltrosPendientesForm] =
+    useState<FiltrosPendientes>(FILTROS_PENDIENTES_VACIO);
+  const [filtrosHistorialActivos, setFiltrosHistorialActivos] =
+    useState<FiltrosHistorial>(FILTROS_HISTORIAL_VACIO);
+  const [filtrosHistorialForm, setFiltrosHistorialForm] =
+    useState<FiltrosHistorial>(FILTROS_HISTORIAL_VACIO);
   const [buscando, setBuscando] = useState(false);
 
-  // Carga lista activa según tab y filtros activos.
   useEffect(() => {
     setMensaje(null);
     if (tab === 'pendientes') refreshPendientes(filtrosPendientesActivos);
@@ -117,12 +221,12 @@ export default function OficinistaTransferenciasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, filtrosPendientesActivos, filtrosHistorialActivos]);
 
-  // Carga detalle cuando se selecciona pendiente.
   useEffect(() => {
     if (selectedId == null) {
       setDetalle(null);
       return;
     }
+
     let cancelado = false;
     (async () => {
       setCargando(true);
@@ -133,26 +237,28 @@ export default function OficinistaTransferenciasPage() {
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const data: Detalle = await res.json();
         if (!cancelado) setDetalle(data);
-      } catch (err) {
-        if (!cancelado) setMensaje({ tipo: 'error', texto: 'No se pudo cargar el detalle' });
+      } catch {
+        if (!cancelado) setMensaje({ tipo: 'error', texto: 'No se pudo cargar el detalle.' });
       } finally {
         if (!cancelado) setCargando(false);
       }
     })();
+
     return () => {
       cancelado = true;
     };
   }, [selectedId]);
 
-  // Descarga el comprobante con headers y lo convierte a object URL para preview.
   useEffect(() => {
     if (!detalle) {
       setComprobanteUrl(null);
       setComprobanteMime('');
       return;
     }
+
     let cancelado = false;
     let objectUrl: string | null = null;
+
     (async () => {
       try {
         const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${detalle.id}/comprobante`, {
@@ -171,6 +277,7 @@ export default function OficinistaTransferenciasPage() {
         }
       }
     })();
+
     return () => {
       cancelado = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -189,8 +296,8 @@ export default function OficinistaTransferenciasPage() {
       setPendientes(data);
       const total = Number(res.headers.get('X-Total-Count'));
       setTotalPendientes(Number.isFinite(total) ? total : data.length);
-    } catch (err) {
-      setMensaje({ tipo: 'error', texto: 'No se pudieron cargar los pendientes' });
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'No se pudieron cargar las transferencias pendientes.' });
     } finally {
       setBuscando(false);
     }
@@ -201,18 +308,21 @@ export default function OficinistaTransferenciasPage() {
     try {
       const qs = buildQueryString({
         estado: filtros.estado !== 'TODOS' ? filtros.estado : undefined,
+        metodoPago: filtros.metodoPago !== 'TODOS' ? filtros.metodoPago : undefined,
         cedula: filtros.cedula,
         fechaDesde: filtros.fechaDesde,
         fechaHasta: filtros.fechaHasta,
       });
-      const res = await fetch(`${TICKET_API_URL}/aprobaciones${qs}`, { headers: AUTH_HEADERS });
+      const res = await fetch(`${TICKET_API_URL}/aprobaciones/historial-pagos${qs}`, {
+        headers: AUTH_HEADERS,
+      });
       if (!res.ok) throw new Error(`Error ${res.status}`);
-      const data: AprobacionHist[] = await res.json();
+      const data: HistorialPago[] = await res.json();
       setHistorial(data);
       const total = Number(res.headers.get('X-Total-Count'));
       setTotalHistorial(Number.isFinite(total) ? total : data.length);
     } catch {
-      setMensaje({ tipo: 'error', texto: 'No se pudo cargar el historial' });
+      setMensaje({ tipo: 'error', texto: 'No se pudo cargar el historial de pagos.' });
     } finally {
       setBuscando(false);
     }
@@ -232,6 +342,7 @@ export default function OficinistaTransferenciasPage() {
   function handleBuscarHistorial() {
     setFiltrosHistorialActivos({
       estado: filtrosHistorialForm.estado,
+      metodoPago: filtrosHistorialForm.metodoPago,
       cedula: filtrosHistorialForm.cedula.trim(),
       fechaDesde: filtrosHistorialForm.fechaDesde,
       fechaHasta: filtrosHistorialForm.fechaHasta,
@@ -247,6 +358,7 @@ export default function OficinistaTransferenciasPage() {
     if (!detalle) return;
     setAccion('aprobando');
     setMensaje(null);
+
     try {
       const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${detalle.id}/aprobar`, {
         method: 'POST',
@@ -255,13 +367,14 @@ export default function OficinistaTransferenciasPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? `Error ${res.status}`);
-      setMensaje({ tipo: 'ok', texto: `Transferencia #${detalle.id} aprobada. Boleto VIGENTE.` });
+      setMensaje({ tipo: 'ok', texto: `Transferencia #${detalle.id} aprobada. Boleto vigente.` });
       setSelectedId(null);
       await refreshPendientes(filtrosPendientesActivos);
+      if (tab === 'historial') await refreshHistorial(filtrosHistorialActivos);
     } catch (err) {
       setMensaje({
         tipo: 'error',
-        texto: err instanceof Error ? err.message : 'No se pudo aprobar',
+        texto: err instanceof Error ? err.message : 'No se pudo aprobar la transferencia.',
       });
     } finally {
       setAccion('idle');
@@ -274,8 +387,10 @@ export default function OficinistaTransferenciasPage() {
       setMensaje({ tipo: 'error', texto: `El motivo debe tener al menos ${MIN_MOTIVO} caracteres.` });
       return;
     }
+
     setAccion('rechazando');
     setMensaje(null);
+
     try {
       const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${detalle.id}/rechazar`, {
         method: 'POST',
@@ -289,10 +404,11 @@ export default function OficinistaTransferenciasPage() {
       setMotivo('');
       setSelectedId(null);
       await refreshPendientes(filtrosPendientesActivos);
+      if (tab === 'historial') await refreshHistorial(filtrosHistorialActivos);
     } catch (err) {
       setMensaje({
         tipo: 'error',
-        texto: err instanceof Error ? err.message : 'No se pudo rechazar',
+        texto: err instanceof Error ? err.message : 'No se pudo rechazar la transferencia.',
       });
     } finally {
       setAccion('idle');
@@ -304,20 +420,23 @@ export default function OficinistaTransferenciasPage() {
   return (
     <main className={styles.main}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Validación de comprobantes</h1>
-        <p className={styles.subtitle}>Revisa, aprueba o rechaza pagos por transferencia.</p>
+        <h1 className={styles.title}>Revision de transferencias e historial de pagos</h1>
+        <p className={styles.subtitle}>
+          Aqui el oficinista aprueba comprobantes de transferencia y consulta el historial unificado
+          de boletos cobrados por transferencia, tarjeta y efectivo.
+        </p>
         <nav className={styles.tabs}>
           <button
             className={`${styles.tab} ${tab === 'pendientes' ? styles.tabActive : ''}`}
             onClick={() => setTab('pendientes')}
           >
-            Pendientes ({pendientes.length})
+            Pendientes de transferencia ({pendientes.length})
           </button>
           <button
             className={`${styles.tab} ${tab === 'historial' ? styles.tabActive : ''}`}
             onClick={() => setTab('historial')}
           >
-            Historial
+            Historial de boletos
           </button>
         </nav>
       </header>
@@ -330,11 +449,10 @@ export default function OficinistaTransferenciasPage() {
 
       {tab === 'pendientes' ? (
         <>
-          {/* Mejora US13 (Sprint): búsqueda por cédula sobre pendientes */}
           <div className={styles.filtros}>
             <div className={styles.filtroCampo}>
               <label className={styles.filtroLabel} htmlFor="filtro-cedula-pend">
-                Buscar por cédula
+                Buscar por cedula
               </label>
               <input
                 id="filtro-cedula-pend"
@@ -351,26 +469,19 @@ export default function OficinistaTransferenciasPage() {
               />
             </div>
             <div className={styles.filtroAcciones}>
-              <button
-                className={styles.filtroBtnPrim}
-                onClick={handleBuscarPendientes}
-                disabled={buscando}
-              >
-                {buscando ? 'Buscando…' : 'Buscar'}
+              <button className={styles.filtroBtnPrim} onClick={handleBuscarPendientes} disabled={buscando}>
+                {buscando ? 'Buscando...' : 'Buscar'}
               </button>
-              <button
-                className={styles.filtroBtnSec}
-                onClick={handleLimpiarPendientes}
-                disabled={buscando}
-              >
+              <button className={styles.filtroBtnSec} onClick={handleLimpiarPendientes} disabled={buscando}>
                 Limpiar
               </button>
             </div>
           </div>
+
           {totalPendientes !== null && (
             <div className={styles.contadorResultados}>
               {totalPendientes} pendiente{totalPendientes === 1 ? '' : 's'}
-              {filtrosPendientesActivos.cedula && ` para la cédula ${filtrosPendientesActivos.cedula}`}
+              {filtrosPendientesActivos.cedula && ` para la cedula ${filtrosPendientesActivos.cedula}`}
             </div>
           )}
 
@@ -379,94 +490,130 @@ export default function OficinistaTransferenciasPage() {
               {pendientes.length === 0 ? (
                 <p className={styles.muted}>
                   {filtrosPendientesActivos.cedula
-                    ? 'No se encontraron comprobantes pendientes para esa cédula.'
-                    : 'No hay comprobantes pendientes.'}
+                    ? 'No se encontraron transferencias pendientes para esa cedula.'
+                    : 'No hay transferencias pendientes.'}
                 </p>
               ) : (
                 pendientes.map((p) => (
-                <button
-                  key={p.id}
-                  className={`${styles.listItem} ${selectedId === p.id ? styles.listItemActive : ''}`}
-                  onClick={() => setSelectedId(p.id)}
-                >
-                  <div className={styles.listItemTop}>
-                    <strong>Compra #{p.pago.compra.id}</strong>
-                    <span className={styles.listAmount}>${Number(p.pago.compra.total).toFixed(2)}</span>
-                  </div>
-                  <div className={styles.listItemBottom}>
-                    <span>{p.banco}</span>
-                    <span className={styles.muted}>{new Date(p.creadoEn).toLocaleString()}</span>
-                  </div>
-                </button>
-              ))
-            )}
-          </aside>
+                  <button
+                    key={p.id}
+                    className={`${styles.listItem} ${selectedId === p.id ? styles.listItemActive : ''}`}
+                    onClick={() => setSelectedId(p.id)}
+                  >
+                    <div className={styles.listItemTop}>
+                      <strong>Compra #{p.pago.compra.id}</strong>
+                      <span className={styles.listAmount}>${Number(p.pago.compra.total).toFixed(2)}</span>
+                    </div>
+                    <div className={styles.listItemBottom}>
+                      <span>{p.banco}</span>
+                      <span className={styles.muted}>{formatFecha(p.creadoEn)}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </aside>
 
-          <section className={styles.detalle}>
-            {!detalle && !cargando && (
-              <p className={styles.muted}>Selecciona un comprobante a la izquierda.</p>
-            )}
-            {cargando && <p>Cargando detalle…</p>}
-            {detalle && !cargando && (
-              <>
-                <h2 className={styles.detalleTitle}>Compra #{detalle.pago.compra.id}</h2>
-                <dl className={styles.dataGrid}>
-                  <div><dt>Total</dt><dd>${Number(detalle.pago.compra.total).toFixed(2)}</dd></div>
-                  <div><dt>Fecha viaje</dt><dd>{new Date(detalle.pago.compra.fechaViaje).toLocaleDateString()}</dd></div>
-                  <div><dt>Banco</dt><dd>{detalle.banco}</dd></div>
-                  <div><dt>Referencia</dt><dd><code>{detalle.referencia}</code></dd></div>
-                  <div><dt>Subido</dt><dd>{new Date(detalle.creadoEn).toLocaleString()}</dd></div>
-                </dl>
+            <section className={styles.detalle}>
+              {!detalle && !cargando && (
+                <p className={styles.muted}>Selecciona un comprobante pendiente a la izquierda.</p>
+              )}
+              {cargando && <p>Cargando detalle...</p>}
+              {detalle && !cargando && (
+                <>
+                  <h2 className={styles.detalleTitle}>Compra #{detalle.pago.compra.id}</h2>
+                  <dl className={styles.dataGrid}>
+                    <div>
+                      <dt>Total</dt>
+                      <dd>${Number(detalle.pago.compra.total).toFixed(2)}</dd>
+                    </div>
+                    <div>
+                      <dt>Fecha viaje</dt>
+                      <dd>{new Date(detalle.pago.compra.fechaViaje).toLocaleDateString()}</dd>
+                    </div>
+                    <div>
+                      <dt>Banco</dt>
+                      <dd>{detalle.banco}</dd>
+                    </div>
+                    <div>
+                      <dt>Referencia</dt>
+                      <dd>
+                        <code>{detalle.referencia}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Subido</dt>
+                      <dd>{formatFecha(detalle.creadoEn)}</dd>
+                    </div>
+                  </dl>
 
-                <h3 className={styles.sectionTitle}>Pasajeros</h3>
-                <ul className={styles.pasajeros}>
-                  {detalle.pago.compra.boletos.map((b) => (
-                    <li key={b.id}>
-                      <strong>{b.nombrePasajero}</strong> · {maskCedula(b.cedulaPasajero)}
-                    </li>
-                  ))}
-                </ul>
+                  <h3 className={styles.sectionTitle}>Pasajeros</h3>
+                  <ul className={styles.pasajeros}>
+                    {detalle.pago.compra.boletos.map((b) => (
+                      <li key={b.id}>
+                        <strong>{b.nombrePasajero}</strong> · {maskCedula(b.cedulaPasajero)}
+                      </li>
+                    ))}
+                  </ul>
 
-                <h3 className={styles.sectionTitle}>Comprobante</h3>
-                <div className={styles.previewBox}>
-                  {comprobanteUrl ? (
-                    esImagen ? (
-                      <img className={styles.previewImg} src={comprobanteUrl} alt="Comprobante" />
+                  <h3 className={styles.sectionTitle}>Comprobante</h3>
+                  <div className={styles.previewBox}>
+                    {comprobanteUrl ? (
+                      esImagen ? (
+                        <img className={styles.previewImg} src={comprobanteUrl} alt="Comprobante" />
+                      ) : (
+                        <iframe className={styles.previewIframe} src={comprobanteUrl} title="Comprobante" />
+                      )
                     ) : (
-                      <iframe className={styles.previewIframe} src={comprobanteUrl} title="Comprobante" />
-                    )
-                  ) : (
-                    <p className={styles.muted}>Cargando comprobante…</p>
-                  )}
-                </div>
+                      <p className={styles.muted}>Cargando comprobante...</p>
+                    )}
+                  </div>
 
-                <div className={styles.acciones}>
-                  <button
-                    className={styles.btnAprobar}
-                    onClick={handleAprobar}
-                    disabled={accion !== 'idle'}
-                  >
-                    {accion === 'aprobando' ? 'Aprobando…' : 'Aprobar'}
-                  </button>
-                  <button
-                    className={styles.btnRechazar}
-                    onClick={() => setShowModal(true)}
-                    disabled={accion !== 'idle'}
-                  >
-                    Rechazar
-                  </button>
-                </div>
-              </>
-            )}
-          </section>
+                  <div className={styles.acciones}>
+                    <button className={styles.btnAprobar} onClick={handleAprobar} disabled={accion !== 'idle'}>
+                      {accion === 'aprobando' ? 'Aprobando...' : 'Aprobar'}
+                    </button>
+                    <button
+                      className={styles.btnRechazar}
+                      onClick={() => setShowModal(true)}
+                      disabled={accion !== 'idle'}
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
           </div>
         </>
       ) : (
         <>
-          {/* Mejora US13 (Sprint): filtros del historial */}
           <div className={styles.filtros}>
             <div className={styles.filtroCampoSm}>
-              <label className={styles.filtroLabel} htmlFor="filtro-estado">Estado</label>
+              <label className={styles.filtroLabel} htmlFor="filtro-metodo">
+                Metodo de pago
+              </label>
+              <select
+                id="filtro-metodo"
+                className={styles.filtroSelect}
+                value={filtrosHistorialForm.metodoPago}
+                onChange={(e) =>
+                  setFiltrosHistorialForm({
+                    ...filtrosHistorialForm,
+                    metodoPago: e.target.value as MetodoPagoHistorialFiltro,
+                  })
+                }
+              >
+                <option value="TODOS">Todos</option>
+                <option value="TRANSFERENCIA">Transferencia</option>
+                <option value="TARJETA">Tarjeta</option>
+                <option value="EFECTIVO">Efectivo</option>
+              </select>
+            </div>
+
+            <div className={styles.filtroCampoSm}>
+              <label className={styles.filtroLabel} htmlFor="filtro-estado">
+                Estado
+              </label>
               <select
                 id="filtro-estado"
                 className={styles.filtroSelect}
@@ -479,12 +626,16 @@ export default function OficinistaTransferenciasPage() {
                 }
               >
                 <option value="TODOS">Todos</option>
+                <option value="PENDIENTE">Pendiente</option>
                 <option value="APROBADO">Aprobado</option>
                 <option value="RECHAZADO">Rechazado</option>
               </select>
             </div>
+
             <div className={styles.filtroCampo}>
-              <label className={styles.filtroLabel} htmlFor="filtro-cedula-hist">Cédula</label>
+              <label className={styles.filtroLabel} htmlFor="filtro-cedula-hist">
+                Cedula
+              </label>
               <input
                 id="filtro-cedula-hist"
                 className={styles.filtroInput}
@@ -499,8 +650,11 @@ export default function OficinistaTransferenciasPage() {
                 }}
               />
             </div>
+
             <div className={styles.filtroCampoSm}>
-              <label className={styles.filtroLabel} htmlFor="filtro-desde">Fecha desde</label>
+              <label className={styles.filtroLabel} htmlFor="filtro-desde">
+                Fecha desde
+              </label>
               <input
                 id="filtro-desde"
                 type="date"
@@ -511,8 +665,11 @@ export default function OficinistaTransferenciasPage() {
                 }
               />
             </div>
+
             <div className={styles.filtroCampoSm}>
-              <label className={styles.filtroLabel} htmlFor="filtro-hasta">Fecha hasta</label>
+              <label className={styles.filtroLabel} htmlFor="filtro-hasta">
+                Fecha hasta
+              </label>
               <input
                 id="filtro-hasta"
                 type="date"
@@ -523,19 +680,12 @@ export default function OficinistaTransferenciasPage() {
                 }
               />
             </div>
+
             <div className={styles.filtroAcciones}>
-              <button
-                className={styles.filtroBtnPrim}
-                onClick={handleBuscarHistorial}
-                disabled={buscando}
-              >
-                {buscando ? 'Buscando…' : 'Buscar'}
+              <button className={styles.filtroBtnPrim} onClick={handleBuscarHistorial} disabled={buscando}>
+                {buscando ? 'Buscando...' : 'Buscar'}
               </button>
-              <button
-                className={styles.filtroBtnSec}
-                onClick={handleLimpiarHistorial}
-                disabled={buscando}
-              >
+              <button className={styles.filtroBtnSec} onClick={handleLimpiarHistorial} disabled={buscando}>
                 Limpiar
               </button>
             </div>
@@ -544,13 +694,15 @@ export default function OficinistaTransferenciasPage() {
           {totalHistorial !== null && (
             <div className={styles.contadorResultados}>
               {totalHistorial} resultado{totalHistorial === 1 ? '' : 's'}
+              {filtrosHistorialActivos.metodoPago !== 'TODOS' &&
+                ` · ${formatMetodoPago(filtrosHistorialActivos.metodoPago)}`}
               {filtrosHistorialActivos.estado !== 'TODOS' && ` · ${filtrosHistorialActivos.estado}`}
             </div>
           )}
 
           {historial.length === 0 ? (
             <div className={styles.sinResultados}>
-              No se encontraron aprobaciones para los filtros aplicados.
+              No se encontraron boletos en el historial para los filtros aplicados.
             </div>
           ) : (
             <div className={styles.tablaWrap}>
@@ -558,26 +710,49 @@ export default function OficinistaTransferenciasPage() {
                 <thead>
                   <tr>
                     <th>Fecha / Hora</th>
-                    <th>Transferencia</th>
+                    <th>Metodo</th>
                     <th>Compra</th>
-                    <th>Oficinista</th>
+                    <th>Pasajero</th>
+                    <th>Canal</th>
                     <th>Estado</th>
-                    <th>Motivo</th>
+                    <th>Detalle</th>
+                    <th>Boleto</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {historial.map((h) => (
-                    <tr key={h.id}>
-                      <td>{new Date(h.revisadoEn).toLocaleString()}</td>
-                      <td>#{h.pagoTransferenciaId}</td>
-                      <td>#{h.pagoTransferencia?.pago?.compra?.id ?? '—'}</td>
-                      <td>{h.oficinistaId}</td>
+                  {historial.map((item) => (
+                    <tr key={`${item.id}-${item.compraId}`}>
+                      <td>{formatFecha(item.fechaReferencia)}</td>
                       <td>
-                        <span className={h.estado === 'APROBADO' ? styles.badgeOk : styles.badgeFail}>
-                          {h.estado}
+                        <span className={`${styles.badgeMetodo} ${getMetodoClass(item.metodoPago)}`}>
+                          {formatMetodoPago(item.metodoPago)}
                         </span>
                       </td>
-                      <td>{h.observacion ?? '—'}</td>
+                      <td>
+                        <div className={styles.tableStrong}>#{item.compraId}</div>
+                        <div className={styles.tableMeta}>
+                          {item.boletos.length} boleto{item.boletos.length === 1 ? '' : 's'}
+                        </div>
+                      </td>
+                      <td>
+                        <div className={styles.tableStrong}>{item.pasajeroPrincipal ?? '-'}</div>
+                        <div className={styles.tableMeta}>{maskCedula(item.cedulaPrincipal)}</div>
+                      </td>
+                      <td>{formatCanalVenta(item.canalVenta)}</td>
+                      <td>
+                        <span className={getEstadoClass(item.estado)}>{item.estado}</span>
+                      </td>
+                      <td>
+                        <div className={styles.tableStrong}>{buildDetallePago(item)}</div>
+                        <div className={styles.tableMeta}>
+                          {item.turnoId ? `Turno #${item.turnoId}` : item.compraEstado ?? '-'}
+                        </div>
+                      </td>
+                      <td>
+                        <a className={styles.linkInline} href={`/boleto/${item.compraId}`}>
+                          Ver boleto
+                        </a>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -588,18 +763,18 @@ export default function OficinistaTransferenciasPage() {
       )}
 
       {showModal && (
-        <div className={styles.modalBackdrop} onClick={() => !accion.includes('rechaz') && setShowModal(false)}>
+        <div className={styles.modalBackdrop} onClick={() => accion !== 'rechazando' && setShowModal(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.modalTitle}>Motivo del rechazo</h3>
             <p className={styles.modalHint}>
-              Debe tener al menos {MIN_MOTIVO} caracteres. Se enviará al cliente.
+              Debe tener al menos {MIN_MOTIVO} caracteres. Se enviara al cliente.
             </p>
             <textarea
               className={styles.textarea}
               rows={4}
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Ej. El comprobante está ilegible / no coincide el monto"
+              placeholder="Ej. El comprobante esta ilegible o no coincide el monto."
               disabled={accion === 'rechazando'}
             />
             <div className={styles.modalActions}>
@@ -618,7 +793,7 @@ export default function OficinistaTransferenciasPage() {
                 onClick={handleRechazar}
                 disabled={accion === 'rechazando' || motivo.trim().length < MIN_MOTIVO}
               >
-                {accion === 'rechazando' ? 'Rechazando…' : 'Confirmar rechazo'}
+                {accion === 'rechazando' ? 'Rechazando...' : 'Confirmar rechazo'}
               </button>
             </div>
           </div>

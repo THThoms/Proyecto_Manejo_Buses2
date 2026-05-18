@@ -1,10 +1,10 @@
 .main {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.18), transparent 26%),
-    radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.1), transparent 28%),
-    linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
-  padding: 28px 18px 40px;
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.16), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(34, 197, 94, 0.16), transparent 30%),
+    linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  padding: 24px 16px 40px;
 }
 
 .shell {
@@ -14,12 +14,12 @@
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
   gap: 18px;
   padding: 28px;
   border-radius: 30px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.92));
-  border: 1px solid #dbeafe;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(240, 253, 244, 0.92));
+  border: 1px solid rgba(148, 163, 184, 0.2);
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
 }
 
@@ -28,12 +28,12 @@
   margin-bottom: 12px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #dcfce7;
+  color: #166534;
   font-size: 12px;
   font-weight: 800;
-  text-transform: uppercase;
   letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .title {
@@ -45,9 +45,9 @@
 
 .subtitle {
   margin: 12px 0 0;
-  max-width: 720px;
-  font-size: 16px;
+  max-width: 740px;
   color: #475569;
+  font-size: 16px;
 }
 
 .heroStats {
@@ -58,8 +58,8 @@
 
 .statCard {
   padding: 16px;
-  border-radius: 18px;
-  background: #fff;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid #dbeafe;
 }
 
@@ -75,14 +75,14 @@
 .statValue {
   display: block;
   margin-top: 8px;
-  font-size: 32px;
+  font-size: 30px;
   font-weight: 800;
   color: #0f172a;
 }
 
 .dashboard {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.95fr);
   gap: 18px;
   margin-top: 20px;
 }
@@ -97,36 +97,10 @@
 .panel,
 .sidePanel {
   padding: 22px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
-}
-
-.panel {
-  position: relative;
-  overflow: hidden;
-}
-
-.panel::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: 100%;
-  height: 6px;
-  background: linear-gradient(90deg, #2563eb, #0ea5e9, #14b8a6);
-}
-
-.sidePanel:nth-child(1) {
-  border-top: 5px solid #2563eb;
-}
-
-.sidePanel:nth-child(2) {
-  border-top: 5px solid #14b8a6;
-}
-
-.sidePanel:nth-child(3) {
-  border-top: 5px solid #8b5cf6;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
 }
 
 .panelHeader,
@@ -135,57 +109,49 @@
 .successHeader {
   display: flex;
   justify-content: space-between;
-  gap: 14px;
   align-items: flex-start;
+  gap: 14px;
 }
 
 .panelTitle,
 .sideTitle {
   margin: 0;
-  font-size: 24px;
+  font-size: 25px;
   color: #0f172a;
 }
 
 .panelText,
 .sideText {
   margin: 6px 0 0;
-  font-size: 14px;
   color: #64748b;
+  font-size: 14px;
 }
 
-.ghostButton,
-.linkButton,
-.inlineLink,
-.inlineButton,
-.inlineButtonAlt {
-  border: none;
-  background: transparent;
-  color: #2563eb;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-  text-decoration: none;
+.netBadgeOnline,
+.netBadgeOffline {
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
-.inlineButton,
-.inlineButtonAlt,
-.ghostButton {
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid #bfdbfe;
-  background: #eff6ff;
+.netBadgeOnline {
+  background: #dcfce7;
+  color: #166534;
 }
 
-.inlineButtonAlt {
-  border-color: #cbd5e1;
-  background: #fff;
-  color: #334155;
+.netBadgeOffline {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
-.infoBanner,
+.noticeBox,
 .helperBox,
-.errorBox,
 .emptyBox,
+.messageBox,
+.errorBox,
 .successPanel {
   margin-top: 16px;
   padding: 14px 16px;
@@ -193,10 +159,10 @@
   font-size: 14px;
 }
 
-.infoBanner {
-  background: linear-gradient(135deg, #eff6ff, #f8fafc);
+.noticeBox {
+  background: linear-gradient(135deg, #eff6ff, #f0fdf4);
   border: 1px solid #bfdbfe;
-  color: #1d4ed8;
+  color: #1e3a8a;
 }
 
 .helperBox {
@@ -205,20 +171,36 @@
   color: #475569;
 }
 
-.errorBox {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
-}
-
 .emptyBox {
   background: #f8fafc;
   border: 1px dashed #cbd5e1;
   color: #64748b;
 }
 
+.messageBox {
+  border: 1px solid transparent;
+}
+
+.messageOk {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.messageInfo {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.errorBox {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
 .successPanel {
-  background: linear-gradient(135deg, rgba(220, 252, 231, 0.95), rgba(239, 246, 255, 0.95));
+  background: linear-gradient(135deg, rgba(220, 252, 231, 0.95), rgba(224, 242, 254, 0.95));
   border: 1px solid #a7f3d0;
 }
 
@@ -237,12 +219,6 @@
   color: #065f46;
 }
 
-.successActions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 .successGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -253,7 +229,7 @@
 .metricCard {
   padding: 14px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.84);
   border: 1px solid rgba(255, 255, 255, 0.9);
 }
 
@@ -261,65 +237,51 @@
   display: block;
   font-size: 11px;
   font-weight: 700;
+  color: #047857;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #047857;
 }
 
 .metricCard strong {
   display: block;
   margin-top: 8px;
-  font-size: 24px;
+  font-size: 22px;
   color: #0f172a;
-}
-
-.ticketGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.ticketCard {
-  padding: 14px;
-  border-radius: 18px;
-  background: #fff;
-  border: 1px solid rgba(186, 230, 253, 0.8);
-}
-
-.ticketRow {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-}
-
-.statusTag {
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: #dcfce7;
-  color: #15803d;
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.ticketMeta {
-  margin-top: 8px;
-  color: #64748b;
-  font-size: 13px;
 }
 
 .ticketCode {
   display: block;
-  margin-top: 12px;
+  margin-top: 14px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.92);
   color: #0f172a;
   font-size: 12px;
   word-break: break-all;
+}
+
+.inlineLink,
+.secondaryButton {
+  border: none;
+  background: transparent;
+  color: #0f766e;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.secondaryButton {
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .formStack {
@@ -331,38 +293,22 @@
 
 .block {
   padding: 18px;
-  border-radius: 20px;
+  border-radius: 22px;
   background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
   border: 1px solid #e2e8f0;
 }
 
-.block:nth-of-type(1) {
-  border-left: 5px solid #2563eb;
-}
-
-.block:nth-of-type(2) {
-  border-left: 5px solid #0ea5e9;
-}
-
-.block:nth-of-type(3) {
-  border-left: 5px solid #14b8a6;
-}
-
-.block:nth-of-type(4) {
-  border-left: 5px solid #8b5cf6;
-}
-
 .blockTitle {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
+  color: #334155;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #334155;
 }
 
 .blockNote {
-  font-size: 13px;
   color: #64748b;
+  font-size: 13px;
 }
 
 .formGrid,
@@ -395,8 +341,8 @@
 
 .input:focus {
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
 }
 
 .metaCard {
@@ -413,28 +359,21 @@
 .metaLabel {
   font-size: 11px;
   font-weight: 700;
+  color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #64748b;
-}
-
-.seatMapWrap {
-  margin-top: 14px;
-  padding: 12px;
-  border-radius: 18px;
-  background: #fff;
-  border: 1px solid #dbeafe;
 }
 
 .metricBar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
   margin-top: 14px;
   padding: 12px 14px;
   border-radius: 14px;
   background: #fff;
-  border: 1px solid #dbeafe;
+  border: 1px solid #ccfbf1;
   color: #1e293b;
 }
 
@@ -448,7 +387,6 @@
 
 .formActions {
   display: flex;
-  justify-content: flex-end;
 }
 
 .primaryButton {
@@ -456,7 +394,7 @@
   min-height: 52px;
   border: none;
   border-radius: 16px;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #0f766e, #0f172a);
   color: #fff;
   font-size: 16px;
   font-weight: 800;
@@ -477,16 +415,16 @@
 
 .previewCard {
   padding: 14px;
-  border-radius: 16px;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   border: 1px solid #e2e8f0;
 }
 
 .previewTop {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
   align-items: center;
+  gap: 10px;
   color: #0f172a;
 }
 
@@ -502,14 +440,28 @@
   font-size: 12px;
 }
 
-.methodTag {
+.statusTag {
   padding: 5px 10px;
   border-radius: 999px;
-  background: #ede9fe;
-  color: #6d28d9;
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.statusOk {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.statusSync {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.issueText {
+  margin-top: 8px;
+  color: #b91c1c;
+  font-size: 12px;
 }
 
 @media (max-width: 1100px) {
@@ -536,7 +488,6 @@
 
   .heroStats,
   .successGrid,
-  .ticketGrid,
   .formGrid,
   .metaGrid {
     grid-template-columns: 1fr;
