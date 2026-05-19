@@ -24,3 +24,13 @@ export const subscribeToPushNotifications = async () => {
     console.warn('Push notifications are not supported in this browser');
   }
 };
+
+export const handleInAppNotifications = () => {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const { title, body } = event.data;
+      // Display in-app notification
+      alert(`${title}: ${body}`);
+    });
+  }
+};
