@@ -79,7 +79,7 @@ export default function PwaHome() {
   return (
     <div className={styles.container}>
       <header className={styles.header}>
-        <h1>🚌 PWA Alertas de Paradas</h1>
+        <h1>PWA Alertas de Paradas</h1>
         <p>Recibe notificaciones cuando el bus se acerque a tu parada</p>
       </header>
 
