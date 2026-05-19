@@ -45,3 +45,47 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// Register event listener for push notifications
+self.addEventListener('push', function(event) {
+  const data = event.data.json();
+  const options = {
+    body: data.body,
+    icon: data.icon || '/default-icon.png',
+    badge: data.badge || '/default-badge.png',
+    data: data.data || {},
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// Handle notification click
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  const clickAction = event.notification.data.click_action;
+
+  if (clickAction) {
+    event.waitUntil(clients.openWindow(clickAction));
+  }
+});
+
+// Handle push notification subscription
+self.addEventListener('pushsubscriptionchange', function(event) {
+  event.waitUntil(
+    self.registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: '<Your_Public_VAPID_Key>'
+    }).then(function(newSubscription) {
+      // Send new subscription to the server
+      return fetch('/api/subscribe', {
+        method: 'POST',
+        body: JSON.stringify(newSubscription),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    })
+  );
+});
