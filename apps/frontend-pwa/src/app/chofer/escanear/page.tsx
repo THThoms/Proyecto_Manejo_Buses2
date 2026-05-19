@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
 import styles from './escanear.module.css';
 
 const BUS_API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://localhost:3002';
@@ -83,7 +82,7 @@ export default function EscanearPage() {
   const [sincronizando, setSincronizando] = useState(false);
   const [mensajeSincro, setMensajeSincro] = useState<string | null>(null);
 
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<any>(null);
   const scannerDivId = 'qr-reader';
 
   const selectedTurno = useMemo(
@@ -396,6 +395,7 @@ export default function EscanearPage() {
 
     await new Promise((r) => setTimeout(r, 100));
 
+    const { Html5Qrcode } = await import('html5-qrcode');
     const html5Qr = new Html5Qrcode(scannerDivId);
     scannerRef.current = html5Qr;
 
