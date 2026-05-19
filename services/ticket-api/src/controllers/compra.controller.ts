@@ -24,6 +24,8 @@ const crearCompraSchema = z.object({
   total: z.number().positive(),
   canal: z.enum(['APP', 'WEB', 'OFICIAL', 'OFICINISTA']).default('WEB'),
   asientos: z.array(asientoSchema).min(1).max(10),
+  origen: z.string().optional(),
+  destino: z.string().optional(),
 });
 
 const EXPIRACION_BOLETO_HORAS = 24;
@@ -78,6 +80,8 @@ export const crearCompra = async (req: Request, res: Response) => {
           total: body.total,
           canal: body.canal,
           estado: 'PENDIENTE',
+          origen: body.origen || null,
+          destino: body.destino || null,
         },
       });
 

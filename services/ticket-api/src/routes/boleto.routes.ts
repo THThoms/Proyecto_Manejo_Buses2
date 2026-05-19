@@ -1,7 +1,10 @@
 import { Router } from 'express';
-import { getQrPng, getPdf } from '../controllers/boleto.controller';
+import { getQrPng, getPdf, getBoletoDescensos } from '../controllers/boleto.controller';
 
 const router = Router();
+
+// US17: obtener pasajeros que bajan en parada
+router.get('/descenso', getBoletoDescensos);
 
 // US15 CA #5: QR escaneable (PNG) para mostrar en pantalla.
 router.get('/:boletoId/qr.png', getQrPng);
