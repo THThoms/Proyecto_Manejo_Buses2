@@ -9,21 +9,12 @@ export const verificarBoleto = async (req: Request, res: Response) => {
   const { uuidQr, turnoId } = req.body;
   const oficialId = Number(req.header('x-user-id')) || 1;
 
-  if (!uuidQr || !turnoId) {
-    return res.status(400).json({ error: 'uuidQr y turnoId son requeridos' });
+  if (!uuidQr) {
+    return res.status(400).json({ error: 'uuidQr es requerido' });
   }
 
   try {
-    // 1. Obtener detalles del turno desde bus-api para conseguir el busId
-    let busId = 1;
-    try {
-      const turnoDetalle = await getTurnoDetalle(Number(turnoId));
-      busId = turnoDetalle.bus.id;
-    } catch (err) {
-      console.warn('[verificarBoleto] no se pudo conectar con bus-api para validar el turno, usando busId = 1 por defecto');
-    }
-
-    // 2. Buscar boleto en ticket-api
+    // 1. Buscar boleto en ticket-api
     const boleto = await prisma.boleto.findUnique({
       where: { uuidQr },
       include: {
@@ -40,8 +31,19 @@ export const verificarBoleto = async (req: Request, res: Response) => {
       });
     }
 
-    // 3. Validar si corresponde al turno seleccionado
-    if (boleto.compra.turnoId !== Number(turnoId)) {
+    const finalTurnoId = Number(turnoId) || boleto.compra.turnoId;
+
+    // 2. Obtener detalles del turno desde bus-api para conseguir el busId
+    let busId = 1;
+    try {
+      const turnoDetalle = await getTurnoDetalle(finalTurnoId);
+      busId = turnoDetalle.bus.id;
+    } catch (err) {
+      console.warn('[verificarBoleto] no se pudo conectar con bus-api para validar el turno, usando busId = 1 por defecto');
+    }
+
+    // 3. Validar si corresponde al turno seleccionado (solo si se especificó turnoId)
+    if (turnoId && boleto.compra.turnoId !== Number(turnoId)) {
       return res.status(400).json({
         valido: false,
         motivo: 'TURNO_INCORRECTO',
@@ -108,7 +110,7 @@ export const verificarBoleto = async (req: Request, res: Response) => {
           boletoId: boleto.id,
           oficialId,
           busId,
-          turnoId: Number(turnoId),
+          turnoId: finalTurnoId,
           resultado: 'APROBADO',
         },
       });
@@ -127,6 +129,7 @@ export const verificarBoleto = async (req: Request, res: Response) => {
       tipoTarifa: boleto.tipoTarifa,
       boletoId: boleto.id,
       uuidQr: boleto.uuidQr,
+      turnoId: finalTurnoId,
     });
 
   } catch (error) {

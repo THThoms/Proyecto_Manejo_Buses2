@@ -46,6 +46,7 @@ interface VerificationResult {
   motivo?: string;
   mensaje?: string;
   uuidQr?: string;
+  turnoId?: number;
 }
 
 interface EscaneoPendiente {
@@ -68,10 +69,6 @@ function sameDay(isoDate: string, inputDate: string) {
 
 export default function EscanearPage() {
   const [isOnline, setIsOnline] = useState(true);
-  const [fechaViaje, setFechaViaje] = useState(HOY);
-  const [turnos, setTurnos] = useState<Turno[]>([]);
-  const [turnoId, setTurnoId] = useState('');
-  const [loadingTurnos, setLoadingTurnos] = useState(true);
 
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [lastQr, setLastQr] = useState<string | null>(null);
@@ -84,11 +81,6 @@ export default function EscanearPage() {
 
   const scannerRef = useRef<any>(null);
   const scannerDivId = 'qr-reader';
-
-  const selectedTurno = useMemo(
-    () => turnos.find((t) => String(t.id) === turnoId) ?? null,
-    [turnoId, turnos]
-  );
 
   // ── Online/offline ──────────────────────────
   useEffect(() => {
@@ -104,60 +96,7 @@ export default function EscanearPage() {
     };
   }, []);
 
-  // ── Cargar turnos ───────────────────────────
-  useEffect(() => {
-    let cancelado = false;
-
-    (async () => {
-      try {
-        setLoadingTurnos(true);
-        const res = await fetch(`${BUS_API_URL}/turnos`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as Turno[];
-
-        const turnosChofer = data
-          .filter((t) => {
-            const chofer = t.chofer?.id ?? t.choferId;
-            return chofer == null || chofer === Number(CHOFER_ID);
-          })
-          .sort((a, b) => `${a.fecha}-${a.horaInicio}`.localeCompare(`${b.fecha}-${b.horaInicio}`));
-
-        let turnosFecha = turnosChofer.filter((t) => sameDay(t.fecha, fechaViaje));
-
-        if (!turnosFecha.length && turnosChofer.length > 0) {
-          const fallback = toInputDate(turnosChofer[0].fecha);
-          if (!cancelado && fallback !== fechaViaje) {
-            setFechaViaje(fallback);
-          }
-          return;
-        }
-
-        if (!cancelado) {
-          setTurnos(turnosFecha);
-          setTurnoId((actual) =>
-            turnosFecha.some((t) => String(t.id) === actual)
-              ? actual
-              : turnosFecha[0]
-              ? String(turnosFecha[0].id)
-              : ''
-          );
-        }
-      } catch {
-        if (!cancelado) {
-          setTurnos([]);
-          setTurnoId('');
-        }
-      } finally {
-        if (!cancelado) setLoadingTurnos(false);
-      }
-    })();
-
-    return () => {
-      cancelado = true;
-    };
-  }, [fechaViaje]);
-
-  // ── Precargar boletos en caché local ────────
+  // ── Cargar y precargar turnos automáticamente en background ──
   const cargarBoletosTurno = async (id: string) => {
     if (!id || !window.navigator.onLine) return;
     try {
@@ -177,10 +116,34 @@ export default function EscanearPage() {
   };
 
   useEffect(() => {
-    if (turnoId && isOnline) {
-      cargarBoletosTurno(turnoId);
-    }
-  }, [turnoId, isOnline]);
+    if (!isOnline) return;
+    let cancelado = false;
+
+    (async () => {
+      try {
+        const res = await fetch(`${BUS_API_URL}/turnos`);
+        if (res.ok && !cancelado) {
+          const data = (await res.json()) as Turno[];
+          const turnosChofer = data.filter((t) => {
+            const chofer = t.chofer?.id ?? t.choferId;
+            return chofer == null || chofer === Number(CHOFER_ID);
+          });
+          
+          // Precargar en background
+          for (const t of turnosChofer) {
+            if (cancelado) break;
+            await cargarBoletosTurno(String(t.id));
+          }
+        }
+      } catch (err) {
+        console.warn('Error precargando turnos en background:', err);
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [isOnline]);
 
   // ── Sincronizar escaneos pendientes ──────────
   const sincronizarEscaneosPendientes = async () => {
@@ -252,7 +215,6 @@ export default function EscanearPage() {
 
   // ── Realizar validación contra API o Local ──
   const realizarVerificacion = async (uuid: string) => {
-    if (!turnoId) return;
     setVerificando(true);
     setResultado(null);
 
@@ -260,12 +222,26 @@ export default function EscanearPage() {
     if (!isOnline) {
       setTimeout(() => {
         try {
-          const cacheKey = `pwa_boletos_turno_${turnoId}`;
-          const rawCache = localStorage.getItem(cacheKey);
-          const boletos = rawCache ? JSON.parse(rawCache) : [];
+          let boleto: any = null;
+          let foundCacheKey: string | null = null;
+          let foundIndex: number = -1;
 
-          const boletoIndex = boletos.findIndex((b: any) => b.uuidQr === uuid);
-          if (boletoIndex === -1) {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('pwa_boletos_turno_')) {
+              const rawCache = localStorage.getItem(key);
+              const boletos = rawCache ? JSON.parse(rawCache) : [];
+              const index = boletos.findIndex((b: any) => b.uuidQr === uuid);
+              if (index !== -1) {
+                boleto = boletos[index];
+                foundCacheKey = key;
+                foundIndex = index;
+                break;
+              }
+            }
+          }
+
+          if (!boleto) {
             setResultado({
               valido: false,
               motivo: 'NO_ENCONTRADO',
@@ -274,8 +250,6 @@ export default function EscanearPage() {
             setVerificando(false);
             return;
           }
-
-          const boleto = boletos[boletoIndex];
 
           if (boleto.estado === 'UTILIZADO') {
             setResultado({
@@ -300,25 +274,33 @@ export default function EscanearPage() {
           }
 
           // Es válido offline! Marcamos en caché local como UTILIZADO
-          boletos[boletoIndex].estado = 'UTILIZADO';
-          localStorage.setItem(cacheKey, JSON.stringify(boletos));
+          if (foundCacheKey && foundIndex !== -1) {
+            const rawCache = localStorage.getItem(foundCacheKey);
+            const boletos = rawCache ? JSON.parse(rawCache) : [];
+            boletos[foundIndex].estado = 'UTILIZADO';
+            localStorage.setItem(foundCacheKey, JSON.stringify(boletos));
 
-          // Guardamos en la cola de sincronización offline
-          const rawPendientes = localStorage.getItem('pwa_escaneos_pendientes');
-          const pendientes = rawPendientes ? JSON.parse(rawPendientes) : [];
-          pendientes.push({ uuidQr: uuid, turnoId: Number(turnoId) });
-          localStorage.setItem('pwa_escaneos_pendientes', JSON.stringify(pendientes));
+            // Extraer turnoId de la clave de caché 'pwa_boletos_turno_XX'
+            const tId = Number(foundCacheKey.replace('pwa_boletos_turno_', ''));
 
-          setResultado({
-            valido: true,
-            pasajero: boleto.nombrePasajero,
-            cedula: boleto.cedulaPasajero,
-            asiento: boleto.id,
-            origen: boleto.origen,
-            destino: boleto.destino,
-            tipoTarifa: boleto.tipoTarifa,
-            uuidQr: boleto.uuidQr,
-          });
+            // Guardamos en la cola de sincronización offline
+            const rawPendientes = localStorage.getItem('pwa_escaneos_pendientes');
+            const pendientes = rawPendientes ? JSON.parse(rawPendientes) : [];
+            pendientes.push({ uuidQr: uuid, turnoId: tId });
+            localStorage.setItem('pwa_escaneos_pendientes', JSON.stringify(pendientes));
+
+            setResultado({
+              valido: true,
+              pasajero: boleto.nombrePasajero,
+              cedula: boleto.cedulaPasajero,
+              asiento: boleto.id,
+              origen: boleto.origen || 'Origen no especificado',
+              destino: boleto.destino || 'Destino no especificado',
+              tipoTarifa: boleto.tipoTarifa,
+              uuidQr: boleto.uuidQr,
+              turnoId: tId,
+            });
+          }
         } catch (err) {
           setResultado({
             valido: false,
@@ -343,16 +325,15 @@ export default function EscanearPage() {
         },
         body: JSON.stringify({
           uuidQr: uuid,
-          turnoId: Number(turnoId),
         }),
       });
 
       const data = await res.json();
       setResultado(data);
 
-      if (data.valido) {
+      if (data.valido && data.turnoId) {
         try {
-          const cacheKey = `pwa_boletos_turno_${turnoId}`;
+          const cacheKey = `pwa_boletos_turno_${data.turnoId}`;
           const rawCache = localStorage.getItem(cacheKey);
           if (rawCache) {
             const boletos = JSON.parse(rawCache);
@@ -427,7 +408,7 @@ export default function EscanearPage() {
       console.error('Error al iniciar cámara:', err);
       setScanState('idle');
     }
-  }, [turnoId, isOnline]);
+  }, [realizarVerificacion]);
 
   // ── Detener escaneo ─────────────────────────
   const stopScanning = useCallback(async () => {
@@ -447,57 +428,27 @@ export default function EscanearPage() {
     <main className={styles.main}>
       <div className={styles.shell}>
         {/* ── Header ─────────────────────── */}
-        <header className={styles.header} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+        <header className={styles.header}>
+          <div className={styles.headerRow}>
             <h1 className={styles.title}>Validar boletos QR</h1>
             <span className={isOnline ? styles.netBadgeOnline : styles.netBadgeOffline}>
               {isOnline ? 'Online' : 'Offline'}
             </span>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', width: '100%' }}>
-            <a href="/chofer/cobrar" className={styles.inlineLink} style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', borderRadius: '8px', color: '#fff', textDecoration: 'none', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', fontSize: '0.85rem' }}>💵 Cobrar Pasaje</a>
-            <span style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)', fontSize: '0.85rem' }}>📷 Validar QR US16</span>
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem', width: '100%' }}>
+            <a href="/chofer/cobrar" style={{ padding: '0.6rem 1.2rem', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', color: '#475569', textDecoration: 'none', fontWeight: '700', display: 'inline-flex', alignItems: 'center', fontSize: '0.85rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', transition: 'all 0.2s' }}>💵 Cobrar Pasaje</a>
+            <span style={{ padding: '0.6rem 1.2rem', background: '#ffffff', borderRadius: '12px', color: '#2563eb', fontWeight: '800', border: '1px solid #bfdbfe', fontSize: '0.85rem', boxShadow: '0 4px 6px -1px rgba(37,99,235,0.08)' }}>📷 Validar QR</span>
           </div>
         </header>
 
         {mensajeSincro && (
-          <div className={styles.infoBox} style={{ background: '#065f46', borderColor: '#047857', color: '#a7f3d0', marginBottom: '0.5rem' }}>
+          <div className={styles.infoBox} style={{ background: '#dcfce7', borderColor: '#bbf7d0', color: '#15803d', marginBottom: '0.5rem', fontWeight: '700' }}>
             🔄 {mensajeSincro}
           </div>
         )}
 
-        {/* ── Selector de turno ──────────── */}
-        <section className={styles.turnoSection}>
-          <label className={styles.label}>
-            Fecha de viaje
-            <input
-              className={styles.select}
-              type="date"
-              value={fechaViaje}
-              onChange={(e) => setFechaViaje(e.target.value)}
-              disabled={loadingTurnos || scanState === 'scanning'}
-            />
-          </label>
 
-          <label className={styles.label} style={{ marginTop: '0.75rem' }}>
-            Turno activo
-            <select
-              className={styles.select}
-              value={turnoId}
-              onChange={(e) => setTurnoId(e.target.value)}
-              disabled={loadingTurnos || !turnos.length || scanState === 'scanning'}
-            >
-              {loadingTurnos && <option>Cargando turnos...</option>}
-              {!loadingTurnos && !turnos.length && <option>Sin turnos disponibles</option>}
-              {turnos.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.ruta.origen} → {t.ruta.destino} — {t.horaInicio} — Bus {t.bus.placa}
-                </option>
-              ))}
-            </select>
-          </label>
-        </section>
 
         {/* ── Zona del escáner ───────────── */}
         <div className={styles.scannerArea}>
@@ -585,9 +536,8 @@ export default function EscanearPage() {
           <button
             className={styles.btnScan}
             onClick={startScanning}
-            disabled={!selectedTurno}
           >
-            {selectedTurno ? '📷 Activar cámara y escanear' : 'Selecciona un turno primero'}
+            📷 Activar cámara y escanear
           </button>
         )}
 

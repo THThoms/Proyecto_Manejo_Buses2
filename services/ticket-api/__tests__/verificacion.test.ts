@@ -194,4 +194,32 @@ describe('POST /verificar-boleto', () => {
       },
     });
   });
+
+  it('happy path: boleto VIGENTE sin enviar turnoId → 200 VALIDO, infiere turnoId automaticamente de la BD', async () => {
+    prismaMock.boleto.findUnique.mockResolvedValue(boletoBase('VIGENTE'));
+
+    const res = await request(app)
+      .post('/verificar-boleto')
+      .set(HEADERS_CHOFER)
+      .send({ uuidQr: 'test-uuid-qr-123' }); // Sin turnoId
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      valido: true,
+      pasajero: 'Carlos Díaz',
+      cedula: '0102030405',
+      destino: 'Ambato',
+      origen: 'Quito',
+    });
+
+    expect(prismaMock.escaneo.create).toHaveBeenCalledWith({
+      data: {
+        boletoId: 10,
+        oficialId: 1,
+        busId: 8,
+        turnoId: 3, // Inferred from purchase
+        resultado: 'APROBADO',
+      },
+    });
+  });
 });
