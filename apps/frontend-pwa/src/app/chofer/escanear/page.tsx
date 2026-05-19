@@ -447,11 +447,18 @@ export default function EscanearPage() {
     <main className={styles.main}>
       <div className={styles.shell}>
         {/* ── Header ─────────────────────── */}
-        <header className={styles.header}>
-          <h1 className={styles.title}>Escanear QR de boleto</h1>
-          <span className={isOnline ? styles.netBadgeOnline : styles.netBadgeOffline}>
-            {isOnline ? 'Online' : 'Offline'}
-          </span>
+        <header className={styles.header} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h1 className={styles.title}>Validar boletos QR</h1>
+            <span className={isOnline ? styles.netBadgeOnline : styles.netBadgeOffline}>
+              {isOnline ? 'Online' : 'Offline'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', width: '100%' }}>
+            <a href="/chofer/cobrar" className={styles.inlineLink} style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', borderRadius: '8px', color: '#fff', textDecoration: 'none', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', fontSize: '0.85rem' }}>💵 Cobrar Pasaje</a>
+            <span style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)', fontSize: '0.85rem' }}>📷 Validar QR US16</span>
+          </div>
         </header>
 
         {mensajeSincro && (
