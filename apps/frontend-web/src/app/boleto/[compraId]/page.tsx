@@ -262,9 +262,28 @@ export default function BoletoPage() {
                 <span className={styles.muted}>Tarifa:</span> {boletoPrincipal.tipoTarifa}
               </div>
               <div className={styles.qrBox}>
-                <span className={styles.qrLabel}>Código del boleto</span>
+                <span className={styles.qrLabel}>Código QR del boleto</span>
+                {/* US15: QR generado por ticket-api a partir del uuidQr. */}
+                <img
+                  className={styles.qrImage}
+                  src={`${TICKET_API_URL}/boletos/${boletoPrincipal.id}/qr.png`}
+                  alt={`QR del boleto ${boletoPrincipal.uuidQr}`}
+                  width={200}
+                  height={200}
+                />
                 <code className={styles.uuidQr}>{boletoPrincipal.uuidQr}</code>
               </div>
+
+              {boletoPrincipal.estado === 'VIGENTE' && (
+                <a
+                  className={styles.downloadBtn}
+                  href={`${TICKET_API_URL}/boletos/${boletoPrincipal.id}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Descargar boleto PDF
+                </a>
+              )}
             </div>
           ) : (
             <p className={styles.muted}>No hay boletos asociados.</p>
