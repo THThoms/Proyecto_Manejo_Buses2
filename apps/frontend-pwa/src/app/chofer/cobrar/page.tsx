@@ -94,6 +94,8 @@ interface VentaPendiente {
   status: EstadoPendiente;
   createdAt: string;
   lastError?: string;
+  origen?: string;
+  destino?: string;
 }
 
 interface HistorialCobroBus {
@@ -224,10 +226,120 @@ export default function ChoferCobrarPage() {
   const [historialLocal, setHistorialLocal] = useState<HistorialCobroBus[]>([]);
   const [ultimoCobro, setUltimoCobro] = useState<HistorialCobroBus | null>(null);
 
+  // US17: GPS & Paradas
+  const [gpsActive, setGpsActive] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [proximaParada, setProximaParada] = useState<{ id: number; nombre: string; orden: number } | null>(null);
+  const [distanciaMetros, setDistanciaMetros] = useState<number | null>(null);
+  const [dentroDelRadio, setDentroDelRadio] = useState(false);
+  const [pasajerosDescenso, setPasajerosDescenso] = useState<{ nombre: string; cedula: string; asientoNumero: number | null }[]>([]);
+  const [loadingDescensos, setLoadingDescensos] = useState(false);
+  const [alertedStops, setAlertedStops] = useState<number[]>([]);
+
   const selectedTurno = useMemo(
     () => turnos.find((turno) => String(turno.id) === turnoId) ?? null,
     [turnoId, turnos]
   );
+
+  // US17: Transmitir ubicación GPS y consultar descensos
+  useEffect(() => {
+    if (!selectedTurno || !isOnline) {
+      setGpsActive(false);
+      setProximaParada(null);
+      setDistanciaMetros(null);
+      setDentroDelRadio(false);
+      setPasajerosDescenso([]);
+      return;
+    }
+
+    setGpsActive(true);
+    setGpsError(null);
+
+    let watchId: number | null = null;
+    let intervalId: any = null;
+    let ultimaLat = -1.269062; // Latitud demo UTA Ambato
+    let ultimaLng = -78.625185; // Longitud demo UTA Ambato
+
+    // Si el navegador soporta geolocalización, la usamos en tiempo real
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          ultimaLat = position.coords.latitude;
+          ultimaLng = position.coords.longitude;
+          setGpsError(null);
+        },
+        (err) => {
+          console.warn('Error de geolocalización PWA, usando coordenadas simuladas:', err.message);
+          setGpsError('Usando simulación de GPS (permiso denegado o error de señal).');
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    } else {
+      setGpsError('Geolocalización no soportada por el navegador. Usando coordenadas simuladas.');
+    }
+
+    // Intervalo de transmisión cada 10 segundos
+    const transmitirGps = async () => {
+      try {
+        const res = await fetch(`${BUS_API_URL}/turnos/${selectedTurno.id}/gps`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: ultimaLat, lng: ultimaLng }),
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        setProximaParada(data.proximaParada);
+        setDistanciaMetros(data.distanciaMetros);
+        setDentroDelRadio(data.dentroDelRadio);
+
+        // Si entramos al radio de alerta y no se ha notificado esta parada antes, alertamos
+        if (data.dentroDelRadio && data.proximaParada) {
+          const stopId = data.proximaParada.id;
+          setAlertedStops((prev) => {
+            if (!prev.includes(stopId)) {
+              // Disparar alerta visual única
+              alert(`🚨 ALERTA: Aproximándose a la parada "${data.proximaParada.nombre}". Pasajeros listos para bajar.`);
+              return [...prev, stopId];
+            }
+            return prev;
+          });
+        }
+
+        // Consultar pasajeros a bajar en la próxima parada
+        if (data.proximaParada) {
+          setLoadingDescensos(true);
+          try {
+            const descensosRes = await fetch(
+              `${TICKET_API_URL}/boletos/descenso?turnoId=${selectedTurno.id}&destino=${encodeURIComponent(
+                data.proximaParada.nombre
+              )}`
+            );
+            if (descensosRes.ok) {
+              const descensosData = await descensosRes.json();
+              setPasajerosDescenso(descensosData);
+            }
+          } catch (err) {
+            console.error('Error al cargar pasajeros de descenso:', err);
+          } finally {
+            setLoadingDescensos(false);
+          }
+        }
+      } catch (err) {
+        console.error('Error al transmitir GPS:', err);
+      }
+    };
+
+    // Ejecutar transmisión inicial y configurar intervalo
+    void transmitirGps();
+    intervalId = setInterval(transmitirGps, 10000);
+
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [selectedTurno, isOnline]);
 
   const selectedAsiento = useMemo(
     () =>
@@ -452,6 +564,8 @@ export default function ChoferCobrarPage() {
             fechaViaje: venta.fechaViaje,
             total: venta.total,
             canal: 'OFICIAL',
+            origen: venta.origen,
+            destino: venta.destino,
             asientos: [
               {
                 asientoTurnoId: venta.asientoTurnoId,
@@ -629,6 +743,8 @@ export default function ChoferCobrarPage() {
       montoRecibido: montoNum,
       status: 'PENDIENTE',
       createdAt: new Date().toISOString(),
+      origen: selectedTurno.ruta.origen,
+      destino: selectedTurno.ruta.destino,
     };
 
     setEnviando(true);
@@ -742,6 +858,62 @@ export default function ChoferCobrarPage() {
                 Solo se muestran viajes asociados al chofer actual. El historial lateral se filtra
                 por el turno que tengas seleccionado.
               </div>
+
+              {/* US17: Transmisión GPS y Pasajeros por Bajar */}
+              {selectedTurno && (
+                <section className={styles.gpsContainer}>
+                  <div className={styles.gpsHeader}>
+                    <h3 className={styles.gpsTitle}>🛰️ Monitoreo GPS y Próxima Parada</h3>
+                    <span className={gpsActive ? styles.gpsActiveBadge : styles.gpsInactiveBadge}>
+                      {gpsActive ? 'Transmitiendo' : 'Inactivo'}
+                    </span>
+                  </div>
+
+                  {gpsError && <p className={styles.gpsError}>{gpsError}</p>}
+
+                  {proximaParada ? (
+                    <div className={styles.gpsInfo}>
+                      <div className={styles.stopInfo}>
+                        <div>
+                          <strong>Próxima parada:</strong> {proximaParada.nombre} (Orden #{proximaParada.orden})
+                        </div>
+                        <div>
+                          <strong>Distancia aproximada:</strong> {distanciaMetros != null ? `${distanciaMetros} metros` : 'Calculando...'}
+                        </div>
+                      </div>
+
+                      {/* Alerta de parada cercana */}
+                      {dentroDelRadio && (
+                        <div className={styles.gpsAlert}>
+                          ⚠️ <strong>¡Cerca de la parada!</strong> Prepárese para el descenso de pasajeros.
+                        </div>
+                      )}
+
+                      {/* Lista de pasajeros a bajar */}
+                      <div className={styles.passengersListSection}>
+                        <h4 className={styles.passengersListTitle}>👥 Pasajeros a bajar en esta parada:</h4>
+                        {loadingDescensos ? (
+                          <p className={styles.loadingText}>Cargando pasajeros...</p>
+                        ) : pasajerosDescenso.length === 0 ? (
+                          <p className={styles.emptyText}>No hay pasajeros registrados para bajar aquí.</p>
+                        ) : (
+                          <ul className={styles.passengersList}>
+                            {pasajerosDescenso.map((pasajero, index) => (
+                              <li key={index} className={styles.passengerItem}>
+                                <span className={styles.passengerSeat}>Asiento #{pasajero.asientoNumero ?? 'S/N'}</span>
+                                <span className={styles.passengerName}>{pasajero.nombre}</span>
+                                <span className={styles.passengerId}>{pasajero.cedula}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className={styles.emptyText}>Inicie el viaje para activar el monitoreo.</p>
+                  )}
+                </section>
+              )}
 
               {ultimoCobro && (
                 <section className={styles.successPanel}>
