@@ -691,6 +691,12 @@ export default function ChoferCobrarPage() {
           <div>
             <span className={styles.eyebrow}>Panel de ruta</span>
             <h1 className={styles.title}>Chofer - efectivo en bus e historial del viaje</h1>
+            
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', marginBottom: '1rem' }}>
+              <span style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)' }}>💵 Cobrar Pasaje</span>
+              <a href="/chofer/escanear" className={styles.inlineLink} style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '8px', color: '#fff', textDecoration: 'none', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center' }}>📷 Validar QR US16</a>
+            </div>
+
             <p className={styles.subtitle}>
               Este panel muestra solo tus turnos, el estado del bus y el historial del viaje
               seleccionado. La venta se crea desde aqui y, si la red cae, queda en cola.

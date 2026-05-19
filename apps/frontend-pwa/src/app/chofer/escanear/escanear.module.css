@@ -1,0 +1,401 @@
+/* =============================================
+   US16 – Escanear QR de boleto (chofer PWA)
+   Premium Light Theme
+   ============================================= */
+
+.main {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ── Shell ─────────────────────────────────── */
+.shell {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  flex: 1;
+}
+
+/* ── Header ────────────────────────────────── */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.netBadge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.netBadgeOnline {
+  composes: netBadge;
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.netBadgeOffline {
+  composes: netBadge;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+/* ── Zona del escáner ──────────────────────── */
+.scannerArea {
+  position: relative;
+  background: #ffffff;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  min-height: 340px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scannerContainer {
+  width: 100%;
+  height: 100%;
+}
+
+/* Sobreescribir estilos internos de html5-qrcode */
+.scannerContainer :global(#qr-reader) {
+  border: none !important;
+  width: 100% !important;
+}
+
+.scannerContainer :global(#qr-reader video) {
+  border-radius: 16px;
+  object-fit: cover;
+}
+
+.scannerContainer :global(#qr-reader__scan_region) {
+  min-height: 300px !important;
+}
+
+.scannerContainer :global(#qr-reader__dashboard) {
+  padding: 12px !important;
+  background: #f8fafc !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+.scannerContainer :global(#qr-reader__dashboard span) {
+  color: #475569 !important;
+  font-size: 0.85rem !important;
+}
+
+.scannerContainer :global(#qr-reader__dashboard button) {
+  background: #3b82f6 !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 10px 20px !important;
+  cursor: pointer !important;
+  font-weight: 600 !important;
+  font-size: 0.85rem !important;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2) !important;
+  transition: all 0.2s !important;
+}
+
+.scannerContainer :global(#qr-reader__dashboard button:hover) {
+  background: #2563eb !important;
+  transform: translateY(-1px) !important;
+}
+
+.scannerPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  color: #475569;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 2.5rem;
+  line-height: 1.5;
+}
+
+.scannerIcon {
+  font-size: 3.5rem;
+  animation: pulse 2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
+
+/* ── QR detectado (placeholder antes de validar) */
+.qrDetected {
+  text-align: center;
+  padding: 2rem;
+  color: #0f172a;
+}
+
+.qrDetected p {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.qrDetected code {
+  display: inline-block;
+  background: #f1f5f9;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #2563eb;
+  font-weight: 600;
+  word-break: break-all;
+  max-width: 100%;
+  border: 1px solid #e2e8f0;
+}
+
+/* ── Botones ───────────────────────────────── */
+.btnScan {
+  width: 100%;
+  padding: 0.95rem;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(37, 99, 235, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btnScan:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(37, 99, 235, 0.35);
+}
+
+.btnScan:active {
+  transform: translateY(0);
+}
+
+.btnScan:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Resultado Overlay (Fullscreen VÁLIDO / INVALIDO) ── */
+.resultOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease-out;
+  backdrop-filter: blur(8px);
+}
+
+.resultValid {
+  composes: resultOverlay;
+  background: linear-gradient(135deg, rgba(6, 95, 70, 0.97) 0%, rgba(4, 120, 87, 0.97) 50%, rgba(5, 150, 105, 0.97) 100%);
+}
+
+.resultInvalid {
+  composes: resultOverlay;
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.97) 0%, rgba(153, 27, 27, 0.97) 50%, rgba(185, 28, 28, 0.97) 100%);
+}
+
+.resultContent {
+  text-align: center;
+  padding: 2.25rem;
+  animation: slideInUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  max-width: 440px;
+  width: 90%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(12px);
+}
+
+.resultIconValid {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+  font-size: 3.5rem;
+  font-weight: 900;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.resultIconInvalid {
+  composes: resultIconValid;
+  color: #dc2626;
+}
+
+.resultTitle {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.resultMotivo {
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 1.75rem;
+}
+
+.resultDataGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+  margin-bottom: 2rem;
+}
+
+.resultDataItem {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 14px;
+  padding: 0.85rem;
+  text-align: center;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.resultDataLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.06em;
+  margin-bottom: 0.35rem;
+}
+
+.resultDataValue {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.btnClose {
+  background: #ffffff;
+  color: #0f172a;
+  border: none;
+  padding: 0.9rem 2.5rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btnClose:hover {
+  background: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Estado de carga ───────────────────────── */
+.loadingState {
+  text-align: center;
+  padding: 2.5rem;
+  color: #475569;
+}
+
+.spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid #f1f5f9;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 1.25rem;
+}
+
+/* ── Info box ──────────────────────────────── */
+.infoBox {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  font-size: 0.85rem;
+  color: #1e40af;
+  line-height: 1.6;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+/* ── Animaciones ───────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
