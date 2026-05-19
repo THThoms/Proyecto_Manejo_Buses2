@@ -8,6 +8,7 @@ export default function PwaHome() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<string>('default');
   const [alerts, setAlerts] = useState<Array<{ id: string; parada: string; distancia: number; timestamp: Date }>>([]);
+  const [alertRadius] = useState(750);
 
   useEffect(() => {
     // Check Service Worker registration
@@ -111,7 +112,7 @@ export default function PwaHome() {
           {notificationsEnabled ? '✓ Notificaciones Habilitadas' : 'Habilitar Notificaciones'}
         </button>
         <p className={styles.hint}>
-          Recibe alertas push cuando el bus esté a menos de {Math.random() * 500 + 500 | 0}m de tu parada
+          Recibe alertas push cuando el bus esté a menos de {alertRadius}m de tu parada
         </p>
       </section>
 
