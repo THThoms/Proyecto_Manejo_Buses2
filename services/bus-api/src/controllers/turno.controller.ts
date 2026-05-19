@@ -168,9 +168,101 @@ export const getTurnoById = async (req: Request, res: Response) => {
       estado: turno.estado,
       ruta: turno.ruta,
       bus: turno.bus,
+      latActual: turno.latActual,
+      lngActual: turno.lngActual,
     });
   } catch (error) {
     console.error('Error al obtener turno:', error);
     return res.status(500).json({ error: 'Error interno al obtener turno' });
+  }
+};
+
+/**
+ * US17: Recibe la ubicación actual (lat, lng) del bus de un turno, actualiza la base de datos
+ * y calcula la proximidad a la parada intermedia o de destino para alertas.
+ */
+export const updateTurnoGps = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { lat, lng } = req.body;
+
+  const turnoId = Number(id);
+  const latNum = parseFloat(String(lat));
+  const lngNum = parseFloat(String(lng));
+
+  if (isNaN(turnoId) || isNaN(latNum) || isNaN(lngNum)) {
+    return res.status(400).json({ error: 'turnoId, lat y lng válidos son obligatorios' });
+  }
+
+  try {
+    // 1. Actualizar coordenadas del turno
+    const turno = await prisma.turno.update({
+      where: { id: turnoId },
+      data: {
+        latActual: latNum,
+        lngActual: lngNum,
+      },
+    });
+
+    // 2. Obtener paradas de la ruta del turno ordenadas por su orden de recorrido
+    const paradas = await prisma.parada.findMany({
+      where: { rutaId: turno.rutaId },
+      orderBy: { orden: 'asc' },
+    });
+
+    // 3. Función Haversine para cálculo de distancia en kilómetros
+    const calcularDistancia = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const R = 6371; // Radio de la Tierra en km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+
+    let proximaParada = null;
+    let dentroDelRadio = false;
+    let distanciaMetros = 0;
+
+    // Calcular distancia a todas las paradas en metros
+    const paradasConDistancia = paradas.map((p) => {
+      const distMeters = calcularDistancia(latNum, lngNum, Number(p.latitud), Number(p.longitud)) * 1000;
+      return { parada: p, distancia: distMeters };
+    });
+
+    // Buscar si el bus está en el radio de alerta de alguna parada
+    const paradaEnRadio = paradasConDistancia.find(pd => pd.distancia <= pd.parada.metrosAlerta);
+
+    if (paradaEnRadio) {
+      proximaParada = paradaEnRadio.parada;
+      dentroDelRadio = true;
+      distanciaMetros = paradaEnRadio.distancia;
+    } else {
+      // Si no está en el radio de ninguna, la próxima parada es la más cercana
+      if (paradasConDistancia.length > 0) {
+        const ordenada = [...paradasConDistancia].sort((a, b) => a.distancia - b.distancia);
+        proximaParada = ordenada[0].parada;
+        distanciaMetros = ordenada[0].distancia;
+      }
+    }
+
+    return res.json({
+      turnoId,
+      latActual: latNum,
+      lngActual: lngNum,
+      proximaParada: proximaParada ? {
+        id: proximaParada.id,
+        nombre: proximaParada.nombre,
+        orden: proximaParada.orden,
+        metrosAlerta: proximaParada.metrosAlerta,
+      } : null,
+      distanciaMetros: Math.round(distanciaMetros),
+      dentroDelRadio,
+    });
+  } catch (error) {
+    console.error('Error al actualizar GPS del turno:', error);
+    return res.status(500).json({ error: 'Error interno al actualizar GPS' });
   }
 };
