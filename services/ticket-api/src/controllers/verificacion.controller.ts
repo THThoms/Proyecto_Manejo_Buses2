@@ -134,3 +134,56 @@ export const verificarBoleto = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Error interno del servidor al verificar el boleto' });
   }
 };
+
+/**
+ * US16: Obtener todos los boletos asociados a un turno (para caché offline de la PWA)
+ */
+export const getBoletosPorTurno = async (req: Request, res: Response) => {
+  const { turnoId } = req.params;
+  if (!turnoId) {
+    return res.status(400).json({ error: 'turnoId es requerido' });
+  }
+
+  try {
+    const boletos = await prisma.boleto.findMany({
+      where: {
+        compra: {
+          turnoId: Number(turnoId),
+        },
+      },
+      select: {
+        id: true,
+        uuidQr: true,
+        nombrePasajero: true,
+        cedulaPasajero: true,
+        tipoTarifa: true,
+        estado: true,
+        compra: {
+          select: {
+            origen: true,
+            destino: true,
+          },
+        },
+      },
+    });
+
+    const boletosSanitizados = boletos.map((b: any) => ({
+      id: b.id,
+      uuidQr: b.uuidQr,
+      nombrePasajero: b.nombrePasajero,
+      cedulaPasajero: b.cedulaPasajero,
+      tipoTarifa: b.tipoTarifa,
+      estado: b.estado,
+      origen: b.compra.origen || 'Origen no especificado',
+      destino: b.compra.destino || 'Destino no especificado',
+    }));
+
+    return res.status(200).json({
+      turnoId: Number(turnoId),
+      boletos: boletosSanitizados,
+    });
+  } catch (error) {
+    console.error('Error al obtener boletos por turno:', error);
+    return res.status(500).json({ error: 'Error interno del servidor al obtener boletos' });
+  }
+};

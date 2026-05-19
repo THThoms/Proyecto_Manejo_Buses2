@@ -46,6 +46,12 @@ interface VerificationResult {
   tipoTarifa?: string;
   motivo?: string;
   mensaje?: string;
+  uuidQr?: string;
+}
+
+interface EscaneoPendiente {
+  uuidQr: string;
+  turnoId: number;
 }
 
 type ScanState = 'idle' | 'scanning' | 'detected';
@@ -73,6 +79,9 @@ export default function EscanearPage() {
 
   const [verificando, setVerificando] = useState(false);
   const [resultado, setResultado] = useState<VerificationResult | null>(null);
+
+  const [sincronizando, setSincronizando] = useState(false);
+  const [mensajeSincro, setMensajeSincro] = useState<string | null>(null);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerDivId = 'qr-reader';
@@ -149,6 +158,86 @@ export default function EscanearPage() {
     };
   }, [fechaViaje]);
 
+  // ── Precargar boletos en caché local ────────
+  const cargarBoletosTurno = async (id: string) => {
+    if (!id || !window.navigator.onLine) return;
+    try {
+      const res = await fetch(`${TICKET_API_URL}/verificar-boleto/turno/${id}/boletos`, {
+        headers: {
+          'x-user-role': 'CHOFER',
+          'x-user-id': CHOFER_ID,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem(`pwa_boletos_turno_${id}`, JSON.stringify(data.boletos || []));
+      }
+    } catch (err) {
+      console.warn('No se pudo precargar los boletos del turno:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (turnoId && isOnline) {
+      cargarBoletosTurno(turnoId);
+    }
+  }, [turnoId, isOnline]);
+
+  // ── Sincronizar escaneos pendientes ──────────
+  const sincronizarEscaneosPendientes = async () => {
+    if (!window.navigator.onLine) return;
+    const raw = localStorage.getItem('pwa_escaneos_pendientes');
+    if (!raw) return;
+    try {
+      const pendientes: EscaneoPendiente[] = JSON.parse(raw);
+      if (!pendientes.length) return;
+      setSincronizando(true);
+
+      const fallidos: EscaneoPendiente[] = [];
+      for (const escaneo of pendientes) {
+        try {
+          const res = await fetch(`${TICKET_API_URL}/verificar-boleto`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-role': 'CHOFER',
+              'x-user-id': CHOFER_ID,
+            },
+            body: JSON.stringify({
+              uuidQr: escaneo.uuidQr,
+              turnoId: escaneo.turnoId,
+            }),
+          });
+          if (!res.ok) {
+            if (res.status >= 500) {
+              fallidos.push(escaneo);
+            }
+          }
+        } catch {
+          fallidos.push(escaneo);
+        }
+      }
+
+      localStorage.setItem('pwa_escaneos_pendientes', JSON.stringify(fallidos));
+      if (fallidos.length === 0) {
+        setMensajeSincro('Sincronizados todos los escaneos realizados offline.');
+        setTimeout(() => setMensajeSincro(null), 5000);
+      } else {
+        setMensajeSincro(`Se sincronizaron algunos escaneos offline. Pendientes: ${fallidos.length}`);
+      }
+    } catch (err) {
+      console.error('Error al sincronizar escaneos:', err);
+    } finally {
+      setSincronizando(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOnline) {
+      sincronizarEscaneosPendientes();
+    }
+  }, [isOnline]);
+
   // ── Limpiar escáner al desmontar ────────────
   useEffect(() => {
     return () => {
@@ -162,11 +251,89 @@ export default function EscanearPage() {
     };
   }, []);
 
-  // ── Realizar validación contra API ──────────
+  // ── Realizar validación contra API o Local ──
   const realizarVerificacion = async (uuid: string) => {
     if (!turnoId) return;
     setVerificando(true);
     setResultado(null);
+
+    // Flujo offline
+    if (!isOnline) {
+      setTimeout(() => {
+        try {
+          const cacheKey = `pwa_boletos_turno_${turnoId}`;
+          const rawCache = localStorage.getItem(cacheKey);
+          const boletos = rawCache ? JSON.parse(rawCache) : [];
+
+          const boletoIndex = boletos.findIndex((b: any) => b.uuidQr === uuid);
+          if (boletoIndex === -1) {
+            setResultado({
+              valido: false,
+              motivo: 'NO_ENCONTRADO',
+              mensaje: 'Boleto no encontrado en la base de datos local (Offline)',
+            });
+            setVerificando(false);
+            return;
+          }
+
+          const boleto = boletos[boletoIndex];
+
+          if (boleto.estado === 'UTILIZADO') {
+            setResultado({
+              valido: false,
+              motivo: 'UTILIZADO',
+              mensaje: 'Este boleto ya fue utilizado (Offline)',
+              pasajero: boleto.nombrePasajero,
+            });
+            setVerificando(false);
+            return;
+          }
+
+          if (boleto.estado !== 'VIGENTE') {
+            setResultado({
+              valido: false,
+              motivo: boleto.estado,
+              mensaje: `El boleto está en estado no válido: ${boleto.estado} (Offline)`,
+              pasajero: boleto.nombrePasajero,
+            });
+            setVerificando(false);
+            return;
+          }
+
+          // Es válido offline! Marcamos en caché local como UTILIZADO
+          boletos[boletoIndex].estado = 'UTILIZADO';
+          localStorage.setItem(cacheKey, JSON.stringify(boletos));
+
+          // Guardamos en la cola de sincronización offline
+          const rawPendientes = localStorage.getItem('pwa_escaneos_pendientes');
+          const pendientes = rawPendientes ? JSON.parse(rawPendientes) : [];
+          pendientes.push({ uuidQr: uuid, turnoId: Number(turnoId) });
+          localStorage.setItem('pwa_escaneos_pendientes', JSON.stringify(pendientes));
+
+          setResultado({
+            valido: true,
+            pasajero: boleto.nombrePasajero,
+            cedula: boleto.cedulaPasajero,
+            asiento: boleto.id,
+            origen: boleto.origen,
+            destino: boleto.destino,
+            tipoTarifa: boleto.tipoTarifa,
+            uuidQr: boleto.uuidQr,
+          });
+        } catch (err) {
+          setResultado({
+            valido: false,
+            motivo: 'ERROR_INTERNO_OFFLINE',
+            mensaje: 'Error al procesar la validación offline.',
+          });
+        } finally {
+          setVerificando(false);
+        }
+      }, 500);
+      return;
+    }
+
+    // Flujo online
     try {
       const res = await fetch(`${TICKET_API_URL}/verificar-boleto`, {
         method: 'POST',
@@ -183,6 +350,23 @@ export default function EscanearPage() {
 
       const data = await res.json();
       setResultado(data);
+
+      if (data.valido) {
+        try {
+          const cacheKey = `pwa_boletos_turno_${turnoId}`;
+          const rawCache = localStorage.getItem(cacheKey);
+          if (rawCache) {
+            const boletos = JSON.parse(rawCache);
+            const index = boletos.findIndex((b: any) => b.uuidQr === uuid);
+            if (index !== -1) {
+              boletos[index].estado = 'UTILIZADO';
+              localStorage.setItem(cacheKey, JSON.stringify(boletos));
+            }
+          }
+        } catch (cacheErr) {
+          console.warn('No se pudo actualizar el boleto en caché local tras scan online:', cacheErr);
+        }
+      }
     } catch (err) {
       setResultado({
         valido: false,
@@ -196,7 +380,6 @@ export default function EscanearPage() {
 
   // ── Iniciar escaneo ─────────────────────────
   const startScanning = useCallback(async () => {
-    // Limpiar cualquier sesión previa
     if (scannerRef.current) {
       try {
         await scannerRef.current.stop();
@@ -211,7 +394,6 @@ export default function EscanearPage() {
     setResultado(null);
     setScanState('scanning');
 
-    // Esperar un tick para que el div esté en el DOM
     await new Promise((r) => setTimeout(r, 100));
 
     const html5Qr = new Html5Qrcode(scannerDivId);
@@ -226,7 +408,6 @@ export default function EscanearPage() {
           aspectRatio: 1,
         },
         async (decodedText) => {
-          // QR detectado
           setLastQr(decodedText);
           setScanState('detected');
           
@@ -239,14 +420,14 @@ export default function EscanearPage() {
           await realizarVerificacion(decodedText);
         },
         () => {
-          // No se detectó QR en este frame, ignorar
+          // Frame vacío, ignorar
         }
       );
     } catch (err) {
       console.error('Error al iniciar cámara:', err);
       setScanState('idle');
     }
-  }, [turnoId]);
+  }, [turnoId, isOnline]);
 
   // ── Detener escaneo ─────────────────────────
   const stopScanning = useCallback(async () => {
@@ -272,6 +453,12 @@ export default function EscanearPage() {
             {isOnline ? 'Online' : 'Offline'}
           </span>
         </header>
+
+        {mensajeSincro && (
+          <div className={styles.infoBox} style={{ background: '#065f46', borderColor: '#047857', color: '#a7f3d0', marginBottom: '0.5rem' }}>
+            🔄 {mensajeSincro}
+          </div>
+        )}
 
         {/* ── Selector de turno ──────────── */}
         <section className={styles.turnoSection}>
@@ -411,8 +598,7 @@ export default function EscanearPage() {
 
         {/* ── Info ───────────────────────── */}
         <div className={styles.infoBox}>
-          💡 La cámara se activa directamente desde el navegador, no se necesita una app externa.
-          Apunta la cámara hacia el código QR del boleto del pasajero.
+          💡 La validación funciona sin conexión. Si la red cae, el sistema verificará contra la lista de boletos guardada localmente y se sincronizará cuando vuelvas a tener red.
         </div>
       </div>
     </main>
