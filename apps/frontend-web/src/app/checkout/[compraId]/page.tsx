@@ -162,11 +162,11 @@ export default function CheckoutPage() {
             </button>
             <button
               className={styles.secondaryBtn}
-              onClick={() => router.push(`/pago/efectivo?compraId=${compra.id}`)}
-              disabled={paying}
-              style={{ marginTop: 10, background: '#10b981', color: '#ffffff', border: 'none' }}
+              disabled
+              style={{ marginTop: 10, background: '#d1d5db', color: '#6b7280', border: 'none', cursor: 'not-allowed' }}
+              title="Próximamente"
             >
-              Pago en Efectivo
+              Pago en efectivo · Próximamente
             </button>
           </>
         )}
