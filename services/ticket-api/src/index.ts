@@ -12,7 +12,7 @@ import efectivoRoutes from './routes/efectivo.routes';
 import aprobacionRoutes from './routes/aprobacion.routes';
 import boletoRoutes from './routes/boleto.routes';
 import webhookRoutes from './routes/webhook.routes';
-import { boletosRouter as validacionBoletosRoutes, turnosRouter as validacionTurnosRoutes } from './routes/validacion.routes';
+import verificacionRoutes from './routes/verificacion.routes';
 import { iniciarLimpiezaTTL } from './services/expirarCompras';
 
 const app = express();
@@ -32,11 +32,8 @@ app.use('/pagos', pagoRoutes);
 app.use('/pagos/transferencia', transferenciaRoutes);
 app.use('/pagos/efectivo', efectivoRoutes);
 app.use('/aprobaciones', aprobacionRoutes);
-// US16: validación de QR debe ir antes para que POST /boletos/validar-qr
-// no choque con la ruta GET /boletos/:boletoId/qr.png de US15.
-app.use('/boletos', validacionBoletosRoutes);
 app.use('/boletos', boletoRoutes);
-app.use('/turnos', validacionTurnosRoutes);
+app.use('/verificar-boleto', verificacionRoutes);
 
 app.listen(port, () => {
   console.log(`Ticket API corriendo en el puerto ${port}`);
