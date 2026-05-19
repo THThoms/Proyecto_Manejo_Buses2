@@ -1,0 +1,383 @@
+/* =============================================
+   US16 – Escanear QR de boleto (chofer PWA)
+   ============================================= */
+
+.main {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Shell ─────────────────────────────────── */
+.shell {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 1rem 1rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1;
+}
+
+/* ── Header ────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0;
+}
+
+.netBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.netBadgeOnline {
+  composes: netBadge;
+  background: #065f46;
+  color: #6ee7b7;
+}
+
+.netBadgeOffline {
+  composes: netBadge;
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+
+/* ── Selector de turno ─────────────────────── */
+.turnoSection {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.select {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.select:focus {
+  border-color: #3b82f6;
+}
+
+.select option {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+/* ── Zona del escáner ──────────────────────── */
+.scannerArea {
+  position: relative;
+  background: #000;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scannerContainer {
+  width: 100%;
+  height: 100%;
+}
+
+/* Sobreescribir estilos internos de html5-qrcode */
+.scannerContainer :global(#qr-reader) {
+  border: none !important;
+  width: 100% !important;
+}
+
+.scannerContainer :global(#qr-reader video) {
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.scannerContainer :global(#qr-reader__scan_region) {
+  min-height: 280px !important;
+}
+
+.scannerContainer :global(#qr-reader__dashboard) {
+  padding: 8px !important;
+}
+
+.scannerContainer :global(#qr-reader__dashboard span) {
+  color: #94a3b8 !important;
+  font-size: 0.8rem !important;
+}
+
+.scannerContainer :global(#qr-reader__dashboard button) {
+  background: #3b82f6 !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  cursor: pointer !important;
+  font-size: 0.8rem !important;
+}
+
+.scannerPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  color: #64748b;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+.scannerIcon {
+  font-size: 3rem;
+  opacity: 0.6;
+}
+
+/* ── QR detectado (placeholder antes de validar) */
+.qrDetected {
+  text-align: center;
+  padding: 1.5rem;
+  color: #f1f5f9;
+}
+
+.qrDetected p {
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.qrDetected code {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: #93c5fd;
+  word-break: break-all;
+  max-width: 100%;
+}
+
+/* ── Botones ───────────────────────────────── */
+.btnScan {
+  width: 100%;
+  padding: 0.85rem;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+}
+
+.btnScan:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.45);
+}
+
+.btnScan:active {
+  transform: translateY(0);
+}
+
+.btnScan:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Resultado: VÁLIDO (verde) ─────────────── */
+.resultOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.resultValid {
+  composes: resultOverlay;
+  background: linear-gradient(135deg, #065f46 0%, #047857 50%, #059669 100%);
+}
+
+.resultInvalid {
+  composes: resultOverlay;
+  background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 50%, #b91c1c 100%);
+}
+
+.resultContent {
+  text-align: center;
+  padding: 2rem;
+  animation: slideInUp 0.4s ease-out;
+  max-width: 400px;
+  width: 100%;
+}
+
+.resultIconValid {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.25rem;
+  font-size: 3rem;
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.resultIconInvalid {
+  composes: resultIconValid;
+}
+
+.resultTitle {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.resultMotivo {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 1.5rem;
+}
+
+.resultDataGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.resultDataItem {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.resultDataLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.04em;
+  margin-bottom: 0.25rem;
+}
+
+.resultDataValue {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.btnClose {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.75rem 2rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btnClose:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Estado de carga ───────────────────────── */
+.loadingState {
+  text-align: center;
+  padding: 2rem;
+  color: #94a3b8;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+/* ── Info box ──────────────────────────────── */
+.infoBox {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  color: #93c5fd;
+  line-height: 1.5;
+}
+
+/* ── Animaciones ───────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
