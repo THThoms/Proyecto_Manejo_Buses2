@@ -31,7 +31,8 @@ export const verificarBoleto = async (req: Request, res: Response) => {
       });
     }
 
-    const finalTurnoId = Number(turnoId) || boleto.compra.turnoId;
+    const parsedTurnoId = Number(turnoId);
+    const finalTurnoId = !isNaN(parsedTurnoId) ? parsedTurnoId : (boleto.compra.turnoId ?? 1);
 
     // 2. Obtener detalles del turno desde bus-api para conseguir el busId
     let busId = 1;

@@ -96,24 +96,31 @@ export default function EscanearPage() {
     };
   }, []);
 
-  // ── Cargar y precargar turnos automáticamente en background ──
-  const cargarBoletosTurno = async (id: string) => {
-    if (!id || !window.navigator.onLine) return;
-    try {
-      const res = await fetch(`${TICKET_API_URL}/verificar-boleto/turno/${id}/boletos`, {
-        headers: {
-          'x-user-role': 'CHOFER',
-          'x-user-id': CHOFER_ID,
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem(`pwa_boletos_turno_${id}`, JSON.stringify(data.boletos || []));
-      }
-    } catch (err) {
-      console.warn('No se pudo precargar los boletos del turno:', err);
-    }
-  };
+   // ── Cargar y precargar turnos automáticamente en background ──
+   const cargarBoletosTurno = async (id: string) => {
+     if (!id || !window.navigator.onLine) return;
+     try {
+       const res = await fetch(`${TICKET_API_URL}/verificar-boleto/turno/${id}/boletos`, {
+         headers: {
+           'x-user-role': 'CHOFER',
+           'x-user-id': CHOFER_ID,
+         },
+       });
+       if (!res.ok) {
+         console.warn(`Failed to fetch boletos for turno ${id}: ${res.status}`);
+         return;
+       }
+       const contentType = res.headers.get('content-type');
+       if (!contentType || !contentType.includes('application/json')) {
+         console.warn(`Response for turno ${id} is not JSON: ${contentType}`);
+         return;
+       }
+       const data = await res.json();
+       localStorage.setItem(`pwa_boletos_turno_${id}`, JSON.stringify(data.boletos || []));
+     } catch (err) {
+       console.warn('No se pudo precargar los boletos del turno:', err);
+     }
+   };
 
   useEffect(() => {
     if (!isOnline) return;
