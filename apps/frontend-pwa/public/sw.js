@@ -46,9 +46,20 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// Prevent duplicate notifications
+const notificationCache = new Set();
+
 // Register event listener for push notifications
 self.addEventListener('push', function(event) {
   const data = event.data.json();
+  const notificationId = data.id; // Unique ID for the notification
+
+  if (notificationCache.has(notificationId)) {
+    return; // Skip duplicate notification
+  }
+
+  notificationCache.add(notificationId);
+
   const options = {
     body: data.body,
     icon: data.icon || '/default-icon.png',
