@@ -1,0 +1,114 @@
+.container {
+  max-width: 450px;
+  margin: 2rem auto;
+  text-align: center;
+}
+
+.successBadge {
+  background: #c6f6d5;
+  color: #22543d;
+  display: inline-block;
+  padding: 0.5rem 1.5rem;
+  border-radius: 9999px;
+  font-weight: bold;
+  margin-bottom: 1.5rem;
+}
+
+.ticketCard {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.header {
+  background: #2d3748;
+  color: white;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.id {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.qrSection {
+  padding: 2rem;
+  background: #fdfdfd;
+}
+
+.qrImage {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto;
+  border: 4px solid white;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.uuid {
+  font-family: monospace;
+  font-size: 0.7rem;
+  color: #718096;
+  margin-top: 1rem;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 1.5rem;
+  gap: 1rem;
+  border-top: 1px dashed #e2e8f0;
+  text-align: left;
+}
+
+.infoItem label {
+  display: block;
+  font-size: 0.7rem;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.infoItem p {
+  margin: 0.25rem 0 0;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.footer {
+  background: #f7fafc;
+  padding: 1rem;
+  border-top: 1px solid #edf2f7;
+}
+
+.cambioInfo {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  color: #4a5568;
+}
+
+.doneBtn {
+  margin-top: 2rem;
+  background: #3182ce;
+  color: white;
+  border: none;
+  padding: 0.8rem 2rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.doneBtn:active {
+  transform: scale(0.98);
+}

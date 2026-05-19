@@ -19,12 +19,11 @@ export default function AsientosPage() {
   const router = useRouter();
 
   const turnoId = Number(params?.turnoId);
-  const rutaId = Number(searchParams?.get('rutaId'));
-  const precio = parseFloat(searchParams?.get('precio') ?? '0');
-  const origen = searchParams?.get('origen') ?? '';
-  const destino = searchParams?.get('destino') ?? '';
-  const fecha = searchParams?.get('fecha') ?? '';
-  const horaInicio = searchParams?.get('horaInicio') ?? '';
+  const [rutaIdState, setRutaIdState] = useState<number | null>(null);
+  const [origenState, setOrigenState] = useState<string>('');
+  const [destinoState, setDestinoState] = useState<string>('');
+  const [fechaState, setFechaState] = useState<string>('');
+  const [horaInicioState, setHoraInicioState] = useState<string>('');
 
   const [asientos, setAsientos] = useState<Asiento[]>([]);
   const [loadingAsientos, setLoadingAsientos] = useState(true);
@@ -53,6 +52,20 @@ export default function AsientosPage() {
   };
 
   useEffect(() => {
+    const rId = Number(searchParams?.get('rutaId'));
+    const orig = searchParams?.get('origen') ?? '';
+    const dest = searchParams?.get('destino') ?? '';
+    const fec = searchParams?.get('fecha') ?? '';
+    const hora = searchParams?.get('horaInicio') ?? '';
+
+    if (rId) setRutaIdState(rId);
+    if (orig) setOrigenState(orig);
+    if (dest) setDestinoState(dest);
+    if (fec) setFechaState(fec);
+    if (hora) setHoraInicioState(hora);
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!Number.isFinite(turnoId)) {
       setErrorAsientos('turnoId inválido');
       setLoadingAsientos(false);
@@ -62,10 +75,27 @@ export default function AsientosPage() {
     (async () => {
       try {
         setLoadingAsientos(true);
+
         const res = await fetch(`${BUS_API_URL}/turnos/${turnoId}/asientos`);
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const data = await res.json();
         if (!cancelado) setAsientos(data.asientos ?? []);
+
+        // Si faltan parámetros clave de la ruta (ingreso directo por URL), los consultamos al backend
+        const rId = Number(searchParams?.get('rutaId'));
+        if (!rId || isNaN(rId)) {
+          const resTurno = await fetch(`${BUS_API_URL}/turnos/${turnoId}`);
+          if (resTurno.ok) {
+            const dataTurno = await resTurno.json();
+            if (!cancelado) {
+              setRutaIdState(dataTurno.ruta?.id || null);
+              setOrigenState(dataTurno.ruta?.origen || '');
+              setDestinoState(dataTurno.ruta?.destino || '');
+              setFechaState(dataTurno.fecha ? dataTurno.fecha.split('T')[0] : '');
+              setHoraInicioState(dataTurno.horaInicio || '');
+            }
+          }
+        }
       } catch (err) {
         if (!cancelado) {
           setErrorAsientos(err instanceof Error ? err.message : 'Error al cargar asientos');
@@ -77,7 +107,7 @@ export default function AsientosPage() {
     return () => {
       cancelado = true;
     };
-  }, [turnoId]);
+  }, [turnoId, searchParams]);
 
   const handleSeatSelect = (asiento: Asiento) => {
     setAsientoSeleccionado(asiento);
@@ -97,6 +127,10 @@ export default function AsientosPage() {
       setErrorSubmit('Ingresa el nombre del pasajero.');
       return;
     }
+    if (!rutaIdState) {
+      setErrorSubmit('No se pudo identificar la ruta para el viaje.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -105,12 +139,13 @@ export default function AsientosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           usuarioId: USUARIO_ID_DEMO,
-          // TODO Sprint 2: lookup real de frecuencia. Hoy usamos rutaId como puente.
-          frecuenciaId: rutaId,
+          frecuenciaId: rutaIdState,
           turnoId,
-          fechaViaje: fecha,
+          fechaViaje: fechaState || new Date().toISOString().split('T')[0],
           total: getPrecioTarifa(tipoTarifa),
           canal: 'WEB',
+          origen: origenState,
+          destino: destinoState,
           asientos: [
             {
               asientoTurnoId: asientoSeleccionado.asientoTurnoId,
@@ -141,7 +176,7 @@ export default function AsientosPage() {
           <button className={styles.backBtn} onClick={() => router.back()}>← Volver</button>
           <h1 className={styles.title}>Selecciona tu asiento</h1>
           <p className={styles.subtitle}>
-            {origen} → {destino} · {fecha} {horaInicio && `· ${horaInicio}`}
+            {origenState} → {destinoState} · {fechaState} {horaInicioState && `· ${horaInicioState}`}
           </p>
         </header>
 

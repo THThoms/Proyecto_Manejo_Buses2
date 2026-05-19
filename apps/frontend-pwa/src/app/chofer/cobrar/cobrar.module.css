@@ -502,3 +502,162 @@
     align-items: flex-start;
   }
 }
+
+/* US17: GPS & Paradas styles */
+.gpsContainer {
+  margin-top: 20px;
+  padding: 22px;
+  border-radius: 26px;
+  background: linear-gradient(135deg, rgba(240, 249, 255, 0.95), rgba(255, 255, 255, 0.95));
+  border: 1px solid rgba(186, 230, 253, 0.8);
+  box-shadow: 0 12px 30px rgba(14, 165, 233, 0.05);
+}
+
+.gpsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.gpsTitle {
+  margin: 0;
+  font-size: 18px;
+  color: #0369a1;
+  font-weight: 800;
+}
+
+.gpsActiveBadge,
+.gpsInactiveBadge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gpsActiveBadge {
+  background: #e0f2fe;
+  color: #0369a1;
+  animation: pulse-glow 2s infinite;
+}
+
+.gpsInactiveBadge {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.gpsError {
+  margin: 0 0 12px;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gpsInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stopInfo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid #e0f2fe;
+  font-size: 14px;
+  color: #334155;
+}
+
+.gpsAlert {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fef3c7, #fffbeb);
+  border: 1px solid #fde68a;
+  color: #92400e;
+  font-size: 14px;
+  animation: bounce-subtle 1s ease-in-out;
+}
+
+.passengersListSection {
+  margin-top: 4px;
+}
+
+.passengersListTitle {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #475569;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.passengersList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.passengerItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.passengerSeat {
+  font-weight: 800;
+  color: #0369a1;
+  background: #e0f2fe;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.passengerName {
+  font-weight: 700;
+  flex-grow: 1;
+}
+
+.passengerId {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.loadingText,
+.emptyText {
+  font-size: 13px;
+  color: #64748b;
+  font-style: italic;
+  margin: 0;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes bounce-subtle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}

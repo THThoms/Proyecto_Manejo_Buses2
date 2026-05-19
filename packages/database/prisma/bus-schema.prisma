@@ -130,6 +130,8 @@ model Turno {
   horaInicio String      @map("hora_inicio")
   horaFin    String?     @map("hora_fin")
   estado     EstadoTurno @default(PENDIENTE)
+  latActual  Decimal?    @map("lat_actual") @db.Decimal(10, 8)
+  lngActual  Decimal?    @map("lng_actual") @db.Decimal(11, 8)
 
   bus    Bus    @relation(fields: [busId], references: [id])
   ruta   Ruta   @relation(fields: [rutaId], references: [id])

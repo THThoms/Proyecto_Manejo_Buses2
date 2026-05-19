@@ -84,18 +84,52 @@ export default function AdminDashboard() {
             <table className={styles.table}>
               <thead>
                 <tr>
-                  {data.length > 0 && Object.keys(data[0]).filter(k => k !== 'id' && typeof data[0][k] !== 'object').map(key => (
-                    <th key={key}>{key.toUpperCase()}</th>
-                  ))}
+                  {activeTab === 'turnos' ? (
+                    <>
+                      <th>ID</th>
+                      <th>BUS</th>
+                      <th>RUTA</th>
+                      <th>FECHA / HORA</th>
+                      <th>ESTADO</th>
+                      <th>GPS EN VIVO</th>
+                    </>
+                  ) : (
+                    data.length > 0 && Object.keys(data[0]).filter(k => k !== 'id' && typeof data[0][k] !== 'object').map(key => (
+                      <th key={key}>{key.toUpperCase()}</th>
+                    ))
+                  )}
                   <th>ACCIONES</th>
                 </tr>
               </thead>
               <tbody>
                 {data.map((item, idx) => (
                   <tr key={item.id || idx}>
-                    {Object.keys(item).filter(k => k !== 'id' && typeof item[k] !== 'object').map(key => (
-                      <td key={key}>{String(item[key])}</td>
-                    ))}
+                    {activeTab === 'turnos' ? (
+                      <>
+                        <td>{item.id}</td>
+                        <td>{item.bus ? `${item.bus.placa} (${item.bus.marca})` : '—'}</td>
+                        <td>{item.ruta ? item.ruta.nombre : '—'}</td>
+                        <td>{item.fecha ? new Date(item.fecha).toLocaleDateString() : '—'} · {item.horaInicio}</td>
+                        <td>
+                          <span className={`${styles.statusTag} ${item.estado === 'EN_RUTA' ? styles.statusEnRuta : ''}`}>
+                            {item.estado}
+                          </span>
+                        </td>
+                        <td>
+                          {item.latActual && item.lngActual ? (
+                            <span className={styles.gpsActive}>
+                              📍 {Number(item.latActual).toFixed(6)}, {Number(item.lngActual).toFixed(6)}
+                            </span>
+                          ) : (
+                            <span className={styles.gpsInactive}>💤 Sin señal GPS</span>
+                          )}
+                        </td>
+                      </>
+                    ) : (
+                      Object.keys(item).filter(k => k !== 'id' && typeof item[k] !== 'object').map(key => (
+                        <td key={key}>{String(item[key])}</td>
+                      ))
+                    )}
                     <td>
                       <button className={styles.editBtn}>Editar</button>
                       <button className={styles.deleteBtn}>Eliminar</button>

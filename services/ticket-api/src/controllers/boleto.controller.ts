@@ -115,3 +115,59 @@ export const getPdf = async (req: Request, res: Response) => {
     }
   }
 };
+
+/**
+ * US17: Obtener los pasajeros de un turno que se bajan en un destino específico (parada).
+ */
+export const getBoletoDescensos = async (req: Request, res: Response) => {
+  const { turnoId, destino } = req.query;
+
+  if (!turnoId || !destino) {
+    return res.status(400).json({ error: 'turnoId y destino son requeridos' });
+  }
+
+  try {
+    // 1. Buscar compras confirmadas para este turno con el destino indicado
+    const compras = await prisma.compra.findMany({
+      where: {
+        turnoId: Number(turnoId),
+        estado: 'CONFIRMADA',
+        destino: { equals: String(destino), mode: 'insensitive' },
+      },
+      include: {
+        boletos: {
+          where: {
+            estado: { in: ['VIGENTE', 'PENDIENTE'] },
+          },
+        },
+        asientos: true,
+      },
+    });
+
+    const pasajeros: { nombre: string; cedula: string; asientoNumero: number | null }[] = [];
+
+    for (const compra of compras) {
+      const boletosOrdenados = await prisma.boleto.findMany({
+        where: { compraId: compra.id },
+        orderBy: { id: 'asc' },
+        select: { id: true },
+      });
+
+      compra.boletos.forEach((boleto) => {
+        const idx = boletosOrdenados.findIndex((b) => b.id === boleto.id);
+        const asiento = idx >= 0 ? compra.asientos[idx] : undefined;
+
+        pasajeros.push({
+          nombre: boleto.nombrePasajero,
+          cedula: boleto.cedulaPasajero,
+          asientoNumero: asiento ? asiento.asientoId : null,
+        });
+      });
+    }
+
+    return res.json(pasajeros);
+  } catch (error) {
+    console.error('Error al obtener pasajeros de descenso:', error);
+    return res.status(500).json({ error: 'Error interno al obtener descensos' });
+  }
+};
