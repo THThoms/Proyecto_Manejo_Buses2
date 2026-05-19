@@ -5,6 +5,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import styles from './escanear.module.css';
 
 const BUS_API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://localhost:3002';
+const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://localhost:3003';
 const CHOFER_ID = '1';
 
 interface Turno {
@@ -35,6 +36,18 @@ interface Turno {
   } | null;
 }
 
+interface VerificationResult {
+  valido: boolean;
+  pasajero?: string;
+  cedula?: string;
+  asiento?: number;
+  destino?: string;
+  origen?: string;
+  tipoTarifa?: string;
+  motivo?: string;
+  mensaje?: string;
+}
+
 type ScanState = 'idle' | 'scanning' | 'detected';
 
 const HOY = new Date().toISOString().slice(0, 10);
@@ -57,6 +70,9 @@ export default function EscanearPage() {
 
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [lastQr, setLastQr] = useState<string | null>(null);
+
+  const [verificando, setVerificando] = useState(false);
+  const [resultado, setResultado] = useState<VerificationResult | null>(null);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerDivId = 'qr-reader';
@@ -146,6 +162,38 @@ export default function EscanearPage() {
     };
   }, []);
 
+  // ── Realizar validación contra API ──────────
+  const realizarVerificacion = async (uuid: string) => {
+    if (!turnoId) return;
+    setVerificando(true);
+    setResultado(null);
+    try {
+      const res = await fetch(`${TICKET_API_URL}/verificar-boleto`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': 'CHOFER',
+          'x-user-id': CHOFER_ID,
+        },
+        body: JSON.stringify({
+          uuidQr: uuid,
+          turnoId: Number(turnoId),
+        }),
+      });
+
+      const data = await res.json();
+      setResultado(data);
+    } catch (err) {
+      setResultado({
+        valido: false,
+        motivo: 'ERROR_CONEXION',
+        mensaje: 'Error de conexión con el servidor principal.',
+      });
+    } finally {
+      setVerificando(false);
+    }
+  };
+
   // ── Iniciar escaneo ─────────────────────────
   const startScanning = useCallback(async () => {
     // Limpiar cualquier sesión previa
@@ -160,6 +208,7 @@ export default function EscanearPage() {
     }
 
     setLastQr(null);
+    setResultado(null);
     setScanState('scanning');
 
     // Esperar un tick para que el div esté en el DOM
@@ -176,15 +225,18 @@ export default function EscanearPage() {
           qrbox: { width: 250, height: 250 },
           aspectRatio: 1,
         },
-        (decodedText) => {
+        async (decodedText) => {
           // QR detectado
           setLastQr(decodedText);
           setScanState('detected');
-          html5Qr
-            .stop()
-            .then(() => html5Qr.clear())
-            .catch(() => {});
+          
+          if (html5Qr.isScanning) {
+            await html5Qr.stop().catch(() => {});
+            html5Qr.clear();
+          }
           scannerRef.current = null;
+
+          await realizarVerificacion(decodedText);
         },
         () => {
           // No se detectó QR en este frame, ignorar
@@ -194,7 +246,7 @@ export default function EscanearPage() {
       console.error('Error al iniciar cámara:', err);
       setScanState('idle');
     }
-  }, []);
+  }, [turnoId]);
 
   // ── Detener escaneo ─────────────────────────
   const stopScanning = useCallback(async () => {
@@ -268,11 +320,57 @@ export default function EscanearPage() {
             </div>
           )}
 
-          {scanState === 'detected' && lastQr && (
-            <div className={styles.qrDetected}>
-              <span style={{ fontSize: '3rem' }}>✅</span>
-              <p>QR detectado correctamente</p>
-              <code>{lastQr}</code>
+          {scanState === 'detected' && verificando && (
+            <div className={styles.loadingState}>
+              <div className={styles.spinner}></div>
+              <p>Consultando validez del boleto...</p>
+            </div>
+          )}
+
+          {scanState === 'detected' && resultado && resultado.valido && (
+            <div className={styles.resultValid}>
+              <div className={styles.resultContent}>
+                <div className={styles.resultIconValid}>✓</div>
+                <h2 className={styles.resultTitle}>BOLETO VÁLIDO</h2>
+                <p className={styles.resultMotivo}>El pasajero puede ingresar al bus</p>
+
+                <div className={styles.resultDataGrid}>
+                  <div className={styles.resultDataItem}>
+                    <div className={styles.resultDataLabel}>Pasajero</div>
+                    <div className={styles.resultDataValue}>{resultado.pasajero}</div>
+                  </div>
+                  <div className={styles.resultDataItem}>
+                    <div className={styles.resultDataLabel}>Asiento</div>
+                    <div className={styles.resultDataValue}>#{resultado.asiento}</div>
+                  </div>
+                  <div className={styles.resultDataItem}>
+                    <div className={styles.resultDataLabel}>Origen</div>
+                    <div className={styles.resultDataValue}>{resultado.origen}</div>
+                  </div>
+                  <div className={styles.resultDataItem}>
+                    <div className={styles.resultDataLabel}>Destino</div>
+                    <div className={styles.resultDataValue}>{resultado.destino}</div>
+                  </div>
+                </div>
+
+                <button className={styles.btnClose} onClick={startScanning}>
+                  Escanear Siguiente
+                </button>
+              </div>
+            </div>
+          )}
+
+          {scanState === 'detected' && resultado && !resultado.valido && (
+            <div className={styles.resultInvalid}>
+              <div className={styles.resultContent}>
+                <div className={styles.resultIconInvalid}>✗</div>
+                <h2 className={styles.resultTitle}>BOLETO RECHAZADO</h2>
+                <p className={styles.resultMotivo}>{resultado.mensaje}</p>
+
+                <button className={styles.btnClose} onClick={startScanning}>
+                  Reintentar Escaneo
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -294,7 +392,7 @@ export default function EscanearPage() {
           </button>
         )}
 
-        {scanState === 'detected' && (
+        {scanState === 'detected' && !verificando && (
           <button className={styles.btnScan} onClick={startScanning}>
             🔄 Escanear otro QR
           </button>
