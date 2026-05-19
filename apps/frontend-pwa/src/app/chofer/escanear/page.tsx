@@ -364,11 +364,22 @@ export default function EscanearPage() {
             <div className={styles.resultInvalid}>
               <div className={styles.resultContent}>
                 <div className={styles.resultIconInvalid}>✗</div>
-                <h2 className={styles.resultTitle}>BOLETO RECHAZADO</h2>
-                <p className={styles.resultMotivo}>{resultado.mensaje}</p>
+                <h2 className={styles.resultTitle}>ACCESO DENEGADO</h2>
+                <p className={styles.resultMotivo} style={{ fontWeight: '600', fontSize: '1.25rem', color: '#fecaca', margin: '0 0 1.5rem' }}>
+                  {resultado.mensaje}
+                </p>
 
-                <button className={styles.btnClose} onClick={startScanning}>
-                  Reintentar Escaneo
+                {resultado.pasajero && (
+                  <div className={styles.resultDataGrid} style={{ gridTemplateColumns: '1fr', marginBottom: '2rem' }}>
+                    <div className={styles.resultDataItem} style={{ background: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                      <div className={styles.resultDataLabel} style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Pasajero Registrado</div>
+                      <div className={styles.resultDataValue}>{resultado.pasajero}</div>
+                    </div>
+                  </div>
+                )}
+
+                <button className={styles.btnClose} style={{ background: 'rgba(255, 255, 255, 0.15)', borderColor: 'rgba(255, 255, 255, 0.25)' }} onClick={startScanning}>
+                  Escanear Siguiente
                 </button>
               </div>
             </div>
