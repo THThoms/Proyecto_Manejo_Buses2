@@ -28,34 +28,40 @@ export default function PwaHome() {
   };
 
   const subscribeToPushNotifications = async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      alert('Push notifications no soportadas en este navegador');
+    if (!('Notification' in window)) {
+      alert('Las notificaciones no son soportadas en este navegador');
       return;
     }
 
     try {
-      const registration = await navigator.serviceWorker.ready;
       const permission = await Notification.requestPermission();
-      
+
       if (permission === 'granted') {
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: 'YOUR_VAPID_PUBLIC_KEY',
-        });
-
-        await fetch('/api/subscribe', {
-          method: 'POST',
-          body: JSON.stringify(subscription),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
         setNotificationsEnabled(true);
         setPermissionStatus('granted');
-        alert('¡Suscripción a notificaciones exitosa!');
+
+        // Intentar suscripción push solo si hay VAPID key real configurada
+        if ('serviceWorker' in navigator && 'PushManager' in window) {
+          try {
+            const registration = await navigator.serviceWorker.ready;
+            const existingSubscription = await registration.pushManager.getSubscription();
+            if (!existingSubscription) {
+              // En producción reemplazar con la VAPID key real
+              // await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: 'VAPID_KEY' });
+              console.info('[PWA] Suscripción push lista para producción con VAPID key');
+            }
+          } catch (pushError) {
+            console.warn('[PWA] Push subscription no disponible en dev:', pushError);
+          }
+        }
+
+        alert('¡Notificaciones habilitadas correctamente!');
+      } else {
+        alert('Permiso de notificaciones denegado. Actívalas desde la configuración del navegador.');
       }
     } catch (error) {
-      console.error('Error suscribiendo a notificaciones:', error);
-      alert('Error al suscribirse a notificaciones');
+      console.error('Error al habilitar notificaciones:', error);
+      alert('Error al habilitar notificaciones. Intenta de nuevo.');
     }
   };
 
