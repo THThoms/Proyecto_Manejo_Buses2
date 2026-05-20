@@ -71,6 +71,14 @@ export interface CooperativaMapResponse {
   }>;
 }
 
+export interface CooperativaDetalle {
+  id: number;
+  nombre: string;
+  ruc?: string | null;
+  cuentaBancaria?: string | null;
+  estado?: string;
+}
+
 export async function getTurnoDetalle(turnoId: number): Promise<TurnoDetalle> {
   const url = `${BUS_API_URL}/turnos/${turnoId}`;
   const res = await fetch(url);
@@ -106,4 +114,14 @@ export async function getCooperativasMap(params: {
     throw new BusApiError(res.status, data, `bus-api cooperativas-map fallo (${res.status})`);
   }
   return data as CooperativaMapResponse;
+}
+
+export async function getCooperativaById(cooperativaId: number): Promise<CooperativaDetalle> {
+  const url = `${BUS_API_URL}/cooperativas/${cooperativaId}`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new BusApiError(res.status, data, `bus-api cooperativa detalle fallo (${res.status})`);
+  }
+  return data as CooperativaDetalle;
 }
