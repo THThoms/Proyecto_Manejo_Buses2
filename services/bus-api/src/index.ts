@@ -8,6 +8,8 @@ import rutaRoutes from './routes/ruta.routes';
 import turnoRoutes from './routes/turno.routes';
 import descuentoRoutes from './routes/descuento.routes';
 import asientoRoutes from './routes/asiento.routes';
+import cooperativaRoutes from './routes/cooperativa.routes';
+import reportingRoutes from './routes/reporting.routes';
 
 dotenv.config();
 
@@ -21,9 +23,11 @@ app.use(express.json());
 // Routes
 app.use('/buses', busRoutes);
 app.use('/rutas', rutaRoutes);
+app.use('/cooperativas', cooperativaRoutes);
 app.use('/turnos', turnoRoutes);
 app.use('/turnos', asientoRoutes); // Asientos anidados bajo /turnos/:turnoId/asientos
 app.use('/descuentos', descuentoRoutes);
+app.use('/reporting', reportingRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {

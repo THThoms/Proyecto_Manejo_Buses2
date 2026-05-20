@@ -7,7 +7,12 @@ export class BusApiError extends Error {
   }
 }
 
-async function postAsiento(turnoId: number, asientoId: number, accion: 'reservar' | 'liberar' | 'ocupar', body?: Record<string, unknown>) {
+async function postAsiento(
+  turnoId: number,
+  asientoId: number,
+  accion: 'reservar' | 'liberar' | 'ocupar',
+  body?: Record<string, unknown>
+) {
   const url = `${BUS_API_URL}/turnos/${turnoId}/asientos/${asientoId}/${accion}`;
   const res = await fetch(url, {
     method: 'POST',
@@ -16,7 +21,7 @@ async function postAsiento(turnoId: number, asientoId: number, accion: 'reservar
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new BusApiError(res.status, data, `bus-api ${accion} falló (${res.status})`);
+    throw new BusApiError(res.status, data, `bus-api ${accion} fallo (${res.status})`);
   }
   return data;
 }
@@ -40,16 +45,65 @@ export interface TurnoDetalle {
   bus: { id: number; placa: string; marca: string };
 }
 
-/**
- * US15: trae el detalle del turno (ruta + horaInicio + bus) para llenar el PDF
- * del boleto. Endpoint expuesto por bus-api en GET /turnos/:id.
- */
+export interface CooperativaLookup {
+  id: number;
+  nombre: string;
+  estado?: string;
+}
+
+export interface CooperativaMapResponse {
+  cooperativas: CooperativaLookup[];
+  turnos: Array<{
+    turnoId: number;
+    cooperativaId: number;
+    cooperativaNombre: string;
+    rutaId: number;
+    rutaNombre: string;
+    precioPasaje: number;
+  }>;
+  frecuencias: Array<{
+    frecuenciaId: number;
+    cooperativaId: number;
+    cooperativaNombre: string;
+    rutaId: number;
+    rutaNombre: string;
+    precioPasaje: number;
+  }>;
+}
+
 export async function getTurnoDetalle(turnoId: number): Promise<TurnoDetalle> {
   const url = `${BUS_API_URL}/turnos/${turnoId}`;
   const res = await fetch(url);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new BusApiError(res.status, data, `bus-api turno detalle falló (${res.status})`);
+    throw new BusApiError(res.status, data, `bus-api turno detalle fallo (${res.status})`);
   }
   return data as TurnoDetalle;
+}
+
+export async function getCooperativasMap(params: {
+  turnoIds?: number[];
+  frecuenciaIds?: number[];
+  cooperativaIds?: number[];
+}): Promise<CooperativaMapResponse> {
+  const search = new URLSearchParams();
+
+  if (params.turnoIds?.length) {
+    search.set('turnoIds', params.turnoIds.join(','));
+  }
+  if (params.frecuenciaIds?.length) {
+    search.set('frecuenciaIds', params.frecuenciaIds.join(','));
+  }
+  if (params.cooperativaIds?.length) {
+    search.set('cooperativaIds', params.cooperativaIds.join(','));
+  }
+
+  const qs = search.toString();
+  const url = `${BUS_API_URL}/reporting/cooperativas-map${qs ? `?${qs}` : ''}`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new BusApiError(res.status, data, `bus-api cooperativas-map fallo (${res.status})`);
+  }
+  return data as CooperativaMapResponse;
 }
