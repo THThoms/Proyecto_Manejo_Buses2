@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import styles from './reportes.module.css';
 
 const BUS_API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://127.0.0.1:3002';
@@ -183,9 +182,9 @@ export default function AdminReportesPage() {
             Reporte de boletos por cooperativa y canal, con totales, subtotales y exportacion.
           </p>
         </div>
-        <Link href="/admin" className={styles.backLink}>
+        <a href="/admin" className={styles.backLink}>
           Volver al panel
-        </Link>
+        </a>
       </header>
 
       <section className={styles.filters}>
