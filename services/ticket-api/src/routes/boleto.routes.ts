@@ -1,10 +1,13 @@
 import { Router } from 'express';
-import { getQrPng, getPdf, getBoletoDescensos } from '../controllers/boleto.controller';
+import { getQrPng, getPdf, getBoletoDescensos, getHistorialUsuario } from '../controllers/boleto.controller';
 
 const router = Router();
 
 // US17: obtener pasajeros que bajan en parada
 router.get('/descenso', getBoletoDescensos);
+
+// US21: historial de compras del usuario (placeholder hasta JWT real).
+router.get('/usuario/:usuarioId', getHistorialUsuario);
 
 // US15 CA #5: QR escaneable (PNG) para mostrar en pantalla.
 router.get('/:boletoId/qr.png', getQrPng);
