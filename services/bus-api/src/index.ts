@@ -10,6 +10,7 @@ import descuentoRoutes from './routes/descuento.routes';
 import asientoRoutes from './routes/asiento.routes';
 import cooperativaRoutes from './routes/cooperativa.routes';
 import frecuenciaRoutes from './routes/frecuencia.routes';
+import configAppRoutes from './routes/configApp.routes';
 
 dotenv.config();
 
@@ -29,6 +30,8 @@ app.use('/descuentos', descuentoRoutes);
 // US19: lectura de cooperativas y frecuencias para resolver compra -> cooperativa
 app.use('/cooperativas', cooperativaRoutes);
 app.use('/frecuencias', frecuenciaRoutes);
+// US22: configuracion visual de la app
+app.use('/config', configAppRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {
