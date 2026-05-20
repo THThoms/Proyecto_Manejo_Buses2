@@ -28,7 +28,13 @@ export default function LoginPage() {
       saveSession(body.token, body.usuario);
       router.push('/historial');
     } catch (err: any) {
-      setError(err?.message ?? 'Error al iniciar sesión');
+      const msg = err?.message ?? 'Error al iniciar sesión';
+      // "Failed to fetch" = auth-api inalcanzable. Damos un mensaje útil con la URL.
+      setError(
+        msg === 'Failed to fetch'
+          ? `No se pudo conectar con el servidor (${AUTH_API_URL}). Verificá que auth-api esté corriendo y que la URL en .env.local sea accesible.`
+          : msg,
+      );
     } finally {
       setLoading(false);
     }
