@@ -14,6 +14,7 @@ import boletoRoutes from './routes/boleto.routes';
 import webhookRoutes from './routes/webhook.routes';
 import verificacionRoutes from './routes/verificacion.routes';
 import reportesRoutes from './routes/reportes.routes';
+import liquidacionRoutes from './routes/liquidacion.routes';
 import { iniciarLimpiezaTTL } from './services/expirarCompras';
 
 const app = express();
@@ -37,6 +38,8 @@ app.use('/boletos', boletoRoutes);
 app.use('/verificar-boleto', verificacionRoutes);
 // US19
 app.use('/reportes', reportesRoutes);
+// US20
+app.use('/liquidaciones', liquidacionRoutes);
 
 app.listen(port, () => {
   console.log(`Ticket API corriendo en el puerto ${port}`);

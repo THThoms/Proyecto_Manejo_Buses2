@@ -101,3 +101,26 @@ export async function listarCooperativas(): Promise<CooperativaListItem[]> {
     return [];
   }
 }
+
+export interface CooperativaDetalle {
+  id: number;
+  nombre: string;
+  ruc: string;
+  cuentaBancaria: string | null;
+  banco: string | null;
+  estado: string;
+}
+
+/**
+ * US20: detalle de cooperativa por id. Incluye cuenta bancaria registrada,
+ * necesaria para la liquidación. Lanza BusApiError si bus-api falla.
+ */
+export async function getCooperativaById(id: number): Promise<CooperativaDetalle> {
+  const url = `${BUS_API_URL}/cooperativas/${id}`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new BusApiError(res.status, data, `bus-api cooperativa falló (${res.status})`);
+  }
+  return data as CooperativaDetalle;
+}
