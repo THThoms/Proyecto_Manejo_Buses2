@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import SeatTripBoard, { SeatTripBoardAsiento } from './SeatTripBoard';
+import { clearSession } from '../../../lib/auth';
 import styles from './cobrar.module.css';
 
 const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://localhost:3003';
@@ -800,23 +801,36 @@ export default function ChoferCobrarPage() {
     }
   }
 
+  function handleLogout() {
+    clearSession();
+    window.location.href = '/login';
+  }
+
   return (
     <main className={styles.main}>
       <div className={styles.shell}>
         <header className={styles.hero}>
-          <div>
-            <span className={styles.eyebrow}>Panel de ruta</span>
-            <h1 className={styles.title}>Chofer - efectivo en bus e historial del viaje</h1>
-            
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', marginBottom: '1rem' }}>
-              <span style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)' }}>💵 Cobrar Pasaje</span>
-              <a href="/chofer/escanear" className={styles.inlineLink} style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '8px', color: '#fff', textDecoration: 'none', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center' }}>📷 Validar QR US16</a>
-            </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <span className={styles.eyebrow}>Panel de ruta</span>
+              <h1 className={styles.title}>Chofer - efectivo en bus e historial del viaje</h1>
+              
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', marginBottom: '1rem' }}>
+                <span style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)' }}>ðµ Cobrar Pasaje</span>
+                <a href="/chofer/escanear" className={styles.inlineLink} style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '8px', color: '#fff', textDecoration: 'none', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center' }}>ð· Validar QR US16</a>
+              </div>
 
-            <p className={styles.subtitle}>
-              Este panel muestra solo tus turnos, el estado del bus y el historial del viaje
-              seleccionado. La venta se crea desde aqui y, si la red cae, queda en cola.
-            </p>
+              <p className={styles.subtitle}>
+                Este panel muestra solo tus turnos, el estado del bus y el historial del viaje
+                seleccionado. La venta se crea desde aqui y, si la red cae, queda en cola.
+              </p>
+            </div>
+            <button
+              onClick={handleLogout}
+              style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '8px', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: '14px', flexShrink: 0 }}
+            >
+              Cerrar sesión
+            </button>
           </div>
           <div className={styles.heroStats}>
             <article className={styles.statCard}>

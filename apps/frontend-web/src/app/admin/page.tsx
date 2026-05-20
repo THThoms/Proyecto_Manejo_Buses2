@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { clearSession } from '@/lib/auth';
 import styles from './admin.module.css';
 
 const API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://127.0.0.1:3002';
@@ -8,6 +10,7 @@ const API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://127.0.0.1:3002';
 type Tab = 'cooperativas' | 'buses' | 'rutas' | 'turnos';
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('cooperativas');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,11 +50,26 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleLogout = () => {
+    clearSession();
+    router.push('/login');
+  };
+
   return (
     <div className={styles.adminContainer}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Panel de Administración</h1>
-        <p className={styles.subtitle}>Gestión de flota, rutas y logística (Sprint 1)</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h1 className={styles.title}>Panel de Administración</h1>
+            <p className={styles.subtitle}>Gestión de flota, rutas y logística (Sprint 1)</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '8px', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: '14px' }}
+          >
+            Cerrar sesión
+          </button>
+        </div>
         <div style={{ marginTop: '14px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
           <a href="/admin/reportes">Ir a reportes administrativos</a>
           <a href="/admin/liquidaciones">Ir a liquidaciones mensuales</a>

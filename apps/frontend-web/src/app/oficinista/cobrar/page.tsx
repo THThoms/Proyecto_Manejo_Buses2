@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SeatMap, { Asiento } from '@/components/SeatMap';
+import { clearSession } from '@/lib/auth';
 import styles from './cobrar.module.css';
 
 const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://localhost:3003';
@@ -453,17 +454,30 @@ export default function CobrarOficinaPage() {
     }
   }
 
+  function handleLogout() {
+    clearSession();
+    router.push('/login');
+  }
+
   return (
     <main className={styles.main}>
       <div className={styles.shell}>
         <header className={styles.hero}>
-          <div>
-            <span className={styles.eyebrow}>Centro de caja</span>
-            <h1 className={styles.title}>Oficinista · cobro efectivo y control de tickets</h1>
-            <p className={styles.subtitle}>
-              Emite tickets en efectivo con el grafico del bus, revisa transferencias pendientes y
-              consulta el historial desde apartados claros.
-            </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <span className={styles.eyebrow}>Centro de caja</span>
+              <h1 className={styles.title}>Oficinista · cobro efectivo y control de tickets</h1>
+              <p className={styles.subtitle}>
+                Emite tickets en efectivo con el grafico del bus, revisa transferencias pendientes y
+                consulta el historial desde apartados claros.
+              </p>
+            </div>
+            <button
+              onClick={handleLogout}
+              style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '8px', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: '14px', flexShrink: 0 }}
+            >
+              Cerrar sesión
+            </button>
           </div>
           <div className={styles.heroStats}>
             <article className={styles.statCard}>

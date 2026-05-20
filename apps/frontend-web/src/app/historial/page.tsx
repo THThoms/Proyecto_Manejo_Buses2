@@ -84,7 +84,10 @@ export default function HistorialPage() {
           <h1 className={styles.title}>Mi historial</h1>
           {user && <p className={styles.subtitle}>{user.nombre} · {user.email}</p>}
         </div>
-        <button onClick={logout} className={styles.logout}>Cerrar sesión</button>
+        <div className={styles.headerActions}>
+          <Link href="/" className={styles.searchBtn}>Buscar viajes</Link>
+          <button onClick={logout} className={styles.logout}>Cerrar sesión</button>
+        </div>
       </header>
 
       {loading && <p className={styles.note}>Cargando…</p>}

@@ -9,9 +9,10 @@ REM  - Detecta la raiz del repo automaticamente.
 REM  - Intenta instalar Node.js y Docker Desktop si faltan.
 REM  - Instala dependencias del monorepo.
 REM  - Levanta PostgreSQL con Docker.
-REM  - Sincroniza Prisma para bus-api y ticket-api.
-REM  - Si la base de buses esta vacia, carga datos minimos.
-REM  - Arranca bus-api, ticket-api, frontend-web y frontend-pwa.
+REM  - Sincroniza Prisma para auth-api, bus-api y ticket-api.
+REM  - Ejecuta seed de auth-api (roles + usuarios de prueba: admin, oficinista, chofer, pasajero).
+REM  - Si la base de buses esta vacia, carga datos minimos (simple-seed).
+REM  - Arranca auth-api, bus-api, ticket-api, frontend-web y frontend-pwa.
 REM  - Guarda logs en /logs y espera a que los servicios respondan.
 REM
 REM  Uso:
@@ -30,13 +31,16 @@ set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 cd /d "%ROOT%" || goto :FATAL
 
+set "AUTH_PORT=3001"
 set "BUS_PORT=3002"
 set "TICKET_PORT=3003"
 set "WEB_PORT=3010"
 set "PWA_PORT=3011"
 
+set "AUTH_DB_URL=postgresql://admin:rootpassword@localhost:5433/auth_db?schema=public"
 set "BUS_DB_URL=postgresql://admin:rootpassword@localhost:5433/bus_db?schema=public"
 set "TICKET_DB_URL=postgresql://admin:rootpassword@localhost:5433/ticket_db?schema=public"
+set "AUTH_API_URL=http://localhost:%AUTH_PORT%"
 set "BUS_API_URL=http://localhost:%BUS_PORT%"
 set "TICKET_API_URL=http://localhost:%TICKET_PORT%"
 set "WEB_URL=http://localhost:%WEB_PORT%"
@@ -69,6 +73,7 @@ call :ENSURE_TOOL npm "npm" "OpenJS.NodeJS.LTS" || goto :FATAL
 call :ENSURE_TOOL powershell "PowerShell" "" || goto :FATAL
 call :ENSURE_DOCKER || goto :FATAL
 
+call :STOP_PORT %AUTH_PORT%
 call :STOP_PORT %BUS_PORT%
 call :STOP_PORT %TICKET_PORT%
 call :STOP_PORT %WEB_PORT%
@@ -83,6 +88,7 @@ call :SEED_BUS_IF_EMPTY || goto :FATAL
 if "%VALIDATE_ONLY%"=="1" goto :VALIDATION_OK
 
 call :START_SERVICES || goto :FATAL
+call :WAIT_URL "%AUTH_API_URL%/health" "auth-api" 90 || goto :FATAL
 call :WAIT_URL "%BUS_API_URL%/health" "bus-api" 90 || goto :FATAL
 call :WAIT_URL "%TICKET_API_URL%/health" "ticket-api" 90 || goto :FATAL
 call :WAIT_URL "%WEB_URL%" "frontend-web" 120 || goto :FATAL
@@ -96,6 +102,7 @@ echo [OK] Proyecto inicializado correctamente.
 echo ============================================================
 echo.
 echo Servicios levantados:
+echo   - auth-api:     %AUTH_API_URL%/health
 echo   - bus-api:      %BUS_API_URL%/health
 echo   - ticket-api:   %TICKET_API_URL%/health
 echo   - frontend-web: %WEB_URL%
@@ -120,6 +127,10 @@ if not exist "%ROOT%\docker-compose.yml" (
   echo [ERROR] No se encontro docker-compose.yml.
   exit /b 1
 )
+if not exist "%ROOT%\services\auth-api\package.json" (
+  echo [ERROR] No se encontro services\auth-api\package.json.
+  exit /b 1
+)
 if not exist "%ROOT%\services\bus-api\package.json" (
   echo [ERROR] No se encontro services\bus-api\package.json.
   exit /b 1
@@ -134,6 +145,10 @@ if not exist "%ROOT%\apps\frontend-web\package.json" (
 )
 if not exist "%ROOT%\apps\frontend-pwa\package.json" (
   echo [ERROR] No se encontro apps\frontend-pwa\package.json.
+  exit /b 1
+)
+if not exist "%ROOT%\packages\database\prisma\auth-schema.prisma" (
+  echo [ERROR] No se encontro packages\database\prisma\auth-schema.prisma.
   exit /b 1
 )
 if not exist "%ROOT%\packages\database\prisma\bus-schema.prisma" (
@@ -262,6 +277,14 @@ exit /b 0
 echo.
 echo [2/6] Generando archivos .env locales...
 
+> "%ROOT%\services\auth-api\.env" (
+  echo # Generado por Iniciar_proyecto.bat
+  echo PORT=%AUTH_PORT%
+  echo AUTH_DATABASE_URL=%AUTH_DB_URL%
+  echo JWT_SECRET=cambiar-este-valor-en-produccion
+  echo APP_PUBLIC_URL=%WEB_URL%
+)
+
 > "%ROOT%\services\bus-api\.env" (
   echo # Generado por Iniciar_proyecto.bat
   echo PORT=%BUS_PORT%
@@ -285,12 +308,15 @@ echo [2/6] Generando archivos .env locales...
   echo # Generado por Iniciar_proyecto.bat
   echo NEXT_PUBLIC_BUS_API_URL=%BUS_API_URL%
   echo NEXT_PUBLIC_TICKET_API_URL=%TICKET_API_URL%
+  echo NEXT_PUBLIC_AUTH_API_URL=%AUTH_API_URL%
+  echo NEXT_PUBLIC_PWA_URL=%PWA_URL%
 )
 
 > "%ROOT%\apps\frontend-pwa\.env.local" (
   echo # Generado por Iniciar_proyecto.bat
   echo NEXT_PUBLIC_BUS_API_URL=%BUS_API_URL%
   echo NEXT_PUBLIC_TICKET_API_URL=%TICKET_API_URL%
+  echo NEXT_PUBLIC_AUTH_API_URL=%AUTH_API_URL%
   echo NEXT_PUBLIC_FRONTEND_WEB_URL=%WEB_URL%
 )
 
@@ -310,6 +336,18 @@ echo [OK] Docker listo.
 
 echo.
 echo [4/6] Sincronizando Prisma y base de datos...
+call npm run db:push --workspace @proyecto-saas/auth-api
+if errorlevel 1 (
+  echo [ERROR] Fallo auth-api db:push.
+  exit /b 1
+)
+
+call npm run generate --workspace @proyecto-saas/auth-api
+if errorlevel 1 (
+  echo [ERROR] Fallo auth-api generate.
+  exit /b 1
+)
+
 call npm run db:push --workspace @proyecto-saas/bus-api
 if errorlevel 1 (
   echo [ERROR] Fallo bus-api db:push.
@@ -331,6 +369,12 @@ if errorlevel 1 (
 call npm run generate --workspace @proyecto-saas/ticket-api
 if errorlevel 1 (
   echo [ERROR] Fallo ticket-api generate.
+  exit /b 1
+)
+
+call npm run seed --workspace @proyecto-saas/auth-api
+if errorlevel 1 (
+  echo [ERROR] Fallo auth-api seed.
   exit /b 1
 )
 
@@ -374,6 +418,8 @@ exit /b 0
 echo.
 echo [6/6] Iniciando servicios...
 
+set "AUTH_LOG=%LOG_DIR%\auth-api-%STAMP%.log"
+set "AUTH_ERR_LOG=%LOG_DIR%\auth-api-%STAMP%.err.log"
 set "BUS_LOG=%LOG_DIR%\bus-api-%STAMP%.log"
 set "BUS_ERR_LOG=%LOG_DIR%\bus-api-%STAMP%.err.log"
 set "TICKET_LOG=%LOG_DIR%\ticket-api-%STAMP%.log"
@@ -382,6 +428,9 @@ set "WEB_LOG=%LOG_DIR%\frontend-web-%STAMP%.log"
 set "WEB_ERR_LOG=%LOG_DIR%\frontend-web-%STAMP%.err.log"
 set "PWA_LOG=%LOG_DIR%\frontend-pwa-%STAMP%.log"
 set "PWA_ERR_LOG=%LOG_DIR%\frontend-pwa-%STAMP%.err.log"
+
+start "AUTH API - %AUTH_PORT%" powershell -NoLogo -NoExit -ExecutionPolicy Bypass -Command "Set-Location -LiteralPath '%ROOT%'; Write-Host '=== AUTH API %AUTH_PORT% ==='; npm run dev --workspace @proyecto-saas/auth-api 2> '%AUTH_ERR_LOG%' | Tee-Object -FilePath '%AUTH_LOG%' -Append"
+timeout /t 2 /nobreak >nul
 
 start "BUS API - %BUS_PORT%" powershell -NoLogo -NoExit -ExecutionPolicy Bypass -Command "Set-Location -LiteralPath '%ROOT%'; Write-Host '=== BUS API %BUS_PORT% ==='; npm run dev --workspace @proyecto-saas/bus-api 2> '%BUS_ERR_LOG%' | Tee-Object -FilePath '%BUS_LOG%' -Append"
 timeout /t 2 /nobreak >nul
