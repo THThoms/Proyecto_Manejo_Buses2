@@ -8,6 +8,8 @@ import rutaRoutes from './routes/ruta.routes';
 import turnoRoutes from './routes/turno.routes';
 import descuentoRoutes from './routes/descuento.routes';
 import asientoRoutes from './routes/asiento.routes';
+import cooperativaRoutes from './routes/cooperativa.routes';
+import frecuenciaRoutes from './routes/frecuencia.routes';
 
 dotenv.config();
 
@@ -24,6 +26,9 @@ app.use('/rutas', rutaRoutes);
 app.use('/turnos', turnoRoutes);
 app.use('/turnos', asientoRoutes); // Asientos anidados bajo /turnos/:turnoId/asientos
 app.use('/descuentos', descuentoRoutes);
+// US19: lectura de cooperativas y frecuencias para resolver compra -> cooperativa
+app.use('/cooperativas', cooperativaRoutes);
+app.use('/frecuencias', frecuenciaRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {

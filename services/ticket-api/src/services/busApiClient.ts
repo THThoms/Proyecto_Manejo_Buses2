@@ -53,3 +53,51 @@ export async function getTurnoDetalle(turnoId: number): Promise<TurnoDetalle> {
   }
   return data as TurnoDetalle;
 }
+
+export interface CooperativaInfo {
+  cooperativaId: number;
+  cooperativaNombre: string;
+}
+export type MapaCooperativas = Record<string, CooperativaInfo>;
+
+/**
+ * US19: dado un set de frecuenciaIds, devuelve el mapa { frecuenciaId -> cooperativa }
+ * resuelto por bus-api en una sola llamada. Si bus-api falla, devolvemos {}; el
+ * reporte degrada a "Cooperativa desconocida" en lugar de romper todo.
+ */
+export async function resolverCooperativasPorFrecuencias(
+  ids: number[],
+): Promise<MapaCooperativas> {
+  const unique = Array.from(new Set(ids)).filter((n) => Number.isInteger(n) && n > 0);
+  if (unique.length === 0) return {};
+  const qs = unique.join(',');
+  try {
+    const res = await fetch(`${BUS_API_URL}/frecuencias/resolver-cooperativas?ids=${qs}`);
+    if (!res.ok) return {};
+    return (await res.json()) as MapaCooperativas;
+  } catch {
+    return {};
+  }
+}
+
+export interface CooperativaListItem {
+  id: number;
+  nombre: string;
+  ruc?: string;
+  estado?: string;
+}
+
+/**
+ * US19: catálogo de cooperativas para que el admin pueda elegir en el filtro.
+ * El frontend lo cruza luego con las cooperativas asignadas al usuario.
+ */
+export async function listarCooperativas(): Promise<CooperativaListItem[]> {
+  try {
+    const res = await fetch(`${BUS_API_URL}/cooperativas`);
+    if (!res.ok) return [];
+    const data: any = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
