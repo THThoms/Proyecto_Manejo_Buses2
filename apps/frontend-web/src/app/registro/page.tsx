@@ -33,7 +33,12 @@ export default function RegistroPage() {
       saveSession(body.token, body.usuario);
       router.push('/historial');
     } catch (err: any) {
-      setError(err?.message ?? 'Error al crear la cuenta');
+      const msg = err?.message ?? 'Error al crear la cuenta';
+      setError(
+        msg === 'Failed to fetch'
+          ? `No se pudo conectar con el servidor (${AUTH_API_URL}). Verificá que auth-api esté corriendo y que la URL en .env.local sea accesible.`
+          : msg,
+      );
     } finally {
       setLoading(false);
     }
