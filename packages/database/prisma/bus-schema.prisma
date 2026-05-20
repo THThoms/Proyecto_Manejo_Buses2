@@ -180,6 +180,23 @@ model Boleto {
   @@map("boletos_validacion")
 }
 
+// US22: configuración visual/global de la app. Tabla single-row (id=1).
+// Reemplazable por valores por defecto si la fila no existe (controller upsert).
+model ConfiguracionApp {
+  id                Int      @id @default(1)
+  logoUrl           String?  @map("logo_url")
+  colorPrimario     String   @default("#2563eb") @map("color_primario")
+  colorSecundario   String   @default("#1f2937") @map("color_secundario")
+  facebookUrl       String?  @map("facebook_url")
+  instagramUrl      String?  @map("instagram_url")
+  whatsapp          String?
+  // Radio GPS para US18 (mínimo 0.1 km).
+  radioAlertaGpsKm  Float    @default(0.5) @map("radio_alerta_gps_km")
+  actualizadoEn     DateTime @default(now()) @updatedAt @map("actualizado_en")
+
+  @@map("configuracion_app")
+}
+
 // ============================================
 // ENUMS
 // ============================================

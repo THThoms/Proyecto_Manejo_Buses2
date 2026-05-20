@@ -36,7 +36,9 @@ app.use('/pagos/efectivo', efectivoRoutes);
 app.use('/aprobaciones', aprobacionRoutes);
 app.use('/boletos', boletoRoutes);
 app.use('/verificar-boleto', verificacionRoutes);
+// US19
 app.use('/reportes', reportesRoutes);
+// US20
 app.use('/liquidaciones', liquidacionRoutes);
 
 app.listen(port, () => {

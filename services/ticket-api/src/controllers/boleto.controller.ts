@@ -117,6 +117,53 @@ export const getPdf = async (req: Request, res: Response) => {
 };
 
 /**
+ * US21: Historial del usuario. Devuelve sus compras y boletos con datos
+ * suficientes para listar y descargar PDF. Sin datos sensibles (cédula completa
+ * solo del propio usuario; en este placeholder enmascaramos igual).
+ *
+ * TODO Sprint 2: validar JWT y derivar usuarioId del token en vez de query.
+ */
+export const getHistorialUsuario = async (req: Request, res: Response) => {
+  const usuarioId = Number(req.params.usuarioId);
+  if (!Number.isInteger(usuarioId) || usuarioId <= 0) {
+    return res.status(400).json({ error: 'usuarioId inválido' });
+  }
+  try {
+    const compras = await prisma.compra.findMany({
+      where: { usuarioId },
+      orderBy: { creadoEn: 'desc' },
+      select: {
+        id: true,
+        fechaViaje: true,
+        total: true,
+        canal: true,
+        estado: true,
+        creadoEn: true,
+        origen: true,
+        destino: true,
+        turnoId: true,
+        boletos: {
+          select: {
+            id: true,
+            uuidQr: true,
+            nombrePasajero: true,
+            tipoTarifa: true,
+            estado: true,
+            expiraEn: true,
+            creadoEn: true,
+          },
+        },
+      },
+      take: 200,
+    });
+    return res.json(compras);
+  } catch (err) {
+    console.error('Error en getHistorialUsuario:', err);
+    return res.status(500).json({ error: 'Error interno' });
+  }
+};
+
+/**
  * US17: Obtener los pasajeros de un turno que se bajan en un destino específico (parada).
  */
 export const getBoletoDescensos = async (req: Request, res: Response) => {

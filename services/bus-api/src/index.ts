@@ -10,6 +10,7 @@ import descuentoRoutes from './routes/descuento.routes';
 import asientoRoutes from './routes/asiento.routes';
 import cooperativaRoutes from './routes/cooperativa.routes';
 import reportingRoutes from './routes/reporting.routes';
+import configAppRoutes from './routes/configApp.routes';
 
 dotenv.config();
 
@@ -27,7 +28,10 @@ app.use('/cooperativas', cooperativaRoutes);
 app.use('/turnos', turnoRoutes);
 app.use('/turnos', asientoRoutes); // Asientos anidados bajo /turnos/:turnoId/asientos
 app.use('/descuentos', descuentoRoutes);
+// US19: endpoints de reporting expuestos por bus-api para que ticket-api resuelva cooperativa.
 app.use('/reporting', reportingRoutes);
+// US22: configuracion visual de la app.
+app.use('/config', configAppRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {
