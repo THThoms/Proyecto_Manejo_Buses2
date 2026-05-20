@@ -9,7 +9,7 @@ import turnoRoutes from './routes/turno.routes';
 import descuentoRoutes from './routes/descuento.routes';
 import asientoRoutes from './routes/asiento.routes';
 import cooperativaRoutes from './routes/cooperativa.routes';
-import frecuenciaRoutes from './routes/frecuencia.routes';
+import reportingRoutes from './routes/reporting.routes';
 import configAppRoutes from './routes/configApp.routes';
 
 dotenv.config();
@@ -24,13 +24,13 @@ app.use(express.json());
 // Routes
 app.use('/buses', busRoutes);
 app.use('/rutas', rutaRoutes);
+app.use('/cooperativas', cooperativaRoutes);
 app.use('/turnos', turnoRoutes);
 app.use('/turnos', asientoRoutes); // Asientos anidados bajo /turnos/:turnoId/asientos
 app.use('/descuentos', descuentoRoutes);
-// US19: lectura de cooperativas y frecuencias para resolver compra -> cooperativa
-app.use('/cooperativas', cooperativaRoutes);
-app.use('/frecuencias', frecuenciaRoutes);
-// US22: configuracion visual de la app
+// US19: endpoints de reporting expuestos por bus-api para que ticket-api resuelva cooperativa.
+app.use('/reporting', reportingRoutes);
+// US22: configuracion visual de la app.
 app.use('/config', configAppRoutes);
 
 // Health Check

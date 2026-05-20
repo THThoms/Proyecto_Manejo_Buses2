@@ -1,13 +1,12 @@
 import { Router } from 'express';
-import { requireAdmin } from '../middlewares/requireAdmin';
-import { liquidacionJson, liquidacionPdf } from '../controllers/liquidacion.controller';
+import {
+  exportarLiquidacionCooperativaPdf,
+  obtenerLiquidacionCooperativa,
+} from '../controllers/liquidacion.controller';
 
 const router = Router();
 
-// US20: ambos endpoints requieren ADMIN y la cooperativa debe estar asignada.
-router.use(requireAdmin);
-
-router.get('/cooperativa', liquidacionJson);
-router.get('/cooperativa/pdf', liquidacionPdf);
+router.get('/cooperativa', obtenerLiquidacionCooperativa);
+router.get('/cooperativa/pdf', exportarLiquidacionCooperativaPdf);
 
 export default router;

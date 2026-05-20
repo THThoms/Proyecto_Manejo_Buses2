@@ -1,261 +1,393 @@
 'use client';
 
-// US20: pantalla de liquidación mensual por cooperativa.
-
 import { useEffect, useMemo, useState } from 'react';
 import styles from './liquidaciones.module.css';
 
-const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://localhost:3003';
-const BUS_API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://localhost:3002';
+const BUS_API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://127.0.0.1:3002';
+const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://127.0.0.1:3003';
+const ADMIN_HEADERS = {
+  'X-User-Role': 'ADMIN',
+  'X-User-Id': '1',
+  'X-Cooperativas-Ids': '1,2,3',
+};
 
-const ADMIN_USER_ID = '1';
-const COOPERATIVAS_ASIGNADAS = '1,2,3';
+type Cooperativa = { id: number; nombre: string };
+type CuentaBancaria = { banco: string; tipo: string; numero: string };
+type LiquidacionDetalle = {
+  compraId: number;
+  boletoId: number;
+  fechaVenta: string;
+  fechaViaje: string;
+  tipoPasajero: string;
+  estadoBoleto: string;
+  monto: number;
+};
+type DesgloseTipo = { tipoPasajero: string; cantidadBoletos: number; montoTotal: number };
+type LiquidacionResponse = {
+  cooperativa: {
+    id: number;
+    nombre: string;
+    ruc: string | null;
+    cuentaBancaria: CuentaBancaria;
+  };
+  periodo: {
+    year: number;
+    month: number;
+    desde: string;
+    hasta: string;
+  };
+  totales: {
+    cantidadBoletos: number;
+    montoTotal: number;
+  };
+  desglosePorTipoPasajero: DesgloseTipo[];
+  detalle: LiquidacionDetalle[];
+};
 
-const MESES = [
-  '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+function parseAssignedCooperativas() {
+  return ADMIN_HEADERS['X-Cooperativas-Ids']
+    .split(',')
+    .map((value) => Number(value.trim()))
+    .filter((value, index, arr) => Number.isInteger(value) && value > 0 && arr.indexOf(value) === index);
+}
+
+function getPreviousMonthSelection() {
+  const now = new Date();
+  const currentMonth = now.getUTCMonth() + 1;
+  return currentMonth === 1
+    ? { year: now.getUTCFullYear() - 1, month: 12 }
+    : { year: now.getUTCFullYear(), month: currentMonth - 1 };
+}
+
+function buildYearOptions() {
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  return Array.from({ length: 6 }, (_, index) => currentYear - index);
+}
+
+const MONTH_OPTIONS = [
+  { value: 1, label: 'Enero' },
+  { value: 2, label: 'Febrero' },
+  { value: 3, label: 'Marzo' },
+  { value: 4, label: 'Abril' },
+  { value: 5, label: 'Mayo' },
+  { value: 6, label: 'Junio' },
+  { value: 7, label: 'Julio' },
+  { value: 8, label: 'Agosto' },
+  { value: 9, label: 'Septiembre' },
+  { value: 10, label: 'Octubre' },
+  { value: 11, label: 'Noviembre' },
+  { value: 12, label: 'Diciembre' },
 ];
 
-interface CoopOpt { id: number; nombre: string; }
-interface DesgloseTipo { tipoPasajero: string; cantidadBoletos: number; montoTotal: number; }
-interface ItemDetalle {
-  compraId: number; boletoId: number; fechaVenta: string; fechaViaje: string;
-  tipoPasajero: string; estadoBoleto: string; monto: number;
-}
-interface Liquidacion {
-  cooperativa: {
-    id: number; nombre: string; ruc: string;
-    cuentaBancaria: { banco: string | null; numero: string | null };
-  };
-  periodo: { year: number; month: number; desde: string; hasta: string };
-  totales: { cantidadBoletos: number; montoTotal: number };
-  desglosePorTipoPasajero: DesgloseTipo[];
-  detalle: ItemDetalle[];
-  criterio: string;
-}
+export default function AdminLiquidacionesPage() {
+  const defaultPeriod = useMemo(() => getPreviousMonthSelection(), []);
+  const yearOptions = useMemo(() => buildYearOptions(), []);
+  const assignedCooperativas = useMemo(() => parseAssignedCooperativas(), []);
 
-function buildHeaders(): HeadersInit {
-  return {
-    'X-User-Role': 'ADMIN',
-    'X-User-Id': ADMIN_USER_ID,
-    'X-Cooperativas-Ids': COOPERATIVAS_ASIGNADAS,
-  };
-}
-
-function previousMonth(): { y: number; m: number } {
-  const hoy = new Date();
-  const m = hoy.getMonth(); // 0..11; el mes pasado es esto mismo (porque el actual es m+1 en 1..12)
-  if (m === 0) return { y: hoy.getFullYear() - 1, m: 12 };
-  return { y: hoy.getFullYear(), m };
-}
-
-export default function LiquidacionesPage() {
-  const def = useMemo(previousMonth, []);
-  const [cooperativas, setCooperativas] = useState<CoopOpt[]>([]);
-  const [cooperativaId, setCooperativaId] = useState<number>(0);
-  const [year, setYear] = useState<number>(def.y);
-  const [month, setMonth] = useState<number>(def.m);
-
-  const [liq, setLiq] = useState<Liquidacion | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [cooperativas, setCooperativas] = useState<Cooperativa[]>([]);
+  const [cooperativaId, setCooperativaId] = useState('');
+  const [year, setYear] = useState(String(defaultPeriod.year));
+  const [month, setMonth] = useState(String(defaultPeriod.month));
+  const [liquidacion, setLiquidacion] = useState<LiquidacionResponse | null>(null);
+  const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
-
-  useEffect(() => { cargarCooperativas(); }, []);
+  const [error, setError] = useState<string | null>(null);
 
   const cargarCooperativas = async () => {
     try {
       const res = await fetch(`${BUS_API_URL}/cooperativas`);
-      if (!res.ok) return;
-      const data: any[] = await res.json();
-      const asignadas = COOPERATIVAS_ASIGNADAS.split(',').map(Number);
-      const opts = data
-        .filter((c) => asignadas.includes(c.id))
-        .map((c) => ({ id: c.id, nombre: c.nombre }));
-      setCooperativas(opts);
-      if (opts[0]) setCooperativaId(opts[0].id);
+      if (!res.ok) {
+        throw new Error(`No se pudieron cargar las cooperativas (HTTP ${res.status})`);
+      }
+      const data = (await res.json()) as Cooperativa[];
+      const visibles = data.filter((item) => assignedCooperativas.includes(item.id));
+      setCooperativas(visibles);
+      if (visibles.length > 0) {
+        setCooperativaId(String(visibles[0].id));
+      }
     } catch (err) {
-      console.error(err);
+      setError(err instanceof Error ? err.message : 'No se pudieron cargar las cooperativas.');
+      setLoading(false);
     }
   };
 
-  const generar = async () => {
+  const buildQuery = () =>
+    new URLSearchParams({
+      cooperativaId,
+      year,
+      month,
+    }).toString();
+
+  const generarLiquidacion = async () => {
     if (!cooperativaId) {
-      setError('Seleccioná una cooperativa.');
+      setError('Selecciona una cooperativa.');
       return;
     }
+
     setLoading(true);
     setError(null);
     try {
-      const qs = `cooperativaId=${cooperativaId}&year=${year}&month=${month}`;
-      const res = await fetch(`${TICKET_API_URL}/liquidaciones/cooperativa?${qs}`, {
-        headers: buildHeaders(),
+      const res = await fetch(`${TICKET_API_URL}/liquidaciones/cooperativa?${buildQuery()}`, {
+        headers: ADMIN_HEADERS,
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error ?? `HTTP ${res.status}`);
+        throw new Error((data as { error?: string }).error || `Error HTTP ${res.status}`);
       }
-      setLiq(await res.json());
-    } catch (err: any) {
-      setLiq(null);
-      setError(err?.message ?? 'Error generando la liquidación');
+      setLiquidacion(data as LiquidacionResponse);
+    } catch (err) {
+      setLiquidacion(null);
+      setError(err instanceof Error ? err.message : 'No se pudo generar la liquidacion.');
     } finally {
       setLoading(false);
     }
   };
 
   const descargarPdf = async () => {
+    if (!cooperativaId) {
+      setError('Selecciona una cooperativa.');
+      return;
+    }
+
     setDownloading(true);
     setError(null);
     try {
-      const qs = `cooperativaId=${cooperativaId}&year=${year}&month=${month}`;
-      const res = await fetch(`${TICKET_API_URL}/liquidaciones/cooperativa/pdf?${qs}`, {
-        headers: buildHeaders(),
+      const res = await fetch(`${TICKET_API_URL}/liquidaciones/cooperativa/pdf?${buildQuery()}`, {
+        headers: ADMIN_HEADERS,
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error ?? `HTTP ${res.status}`);
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || `Error HTTP ${res.status}`);
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `liquidacion-cooperativa-${cooperativaId}-${year}-${String(month).padStart(2, '0')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      setError(err?.message ?? 'Error descargando el PDF');
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `liquidacion-cooperativa-${cooperativaId}-${year}-${String(month).padStart(2, '0')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo descargar el PDF.');
     } finally {
       setDownloading(false);
     }
   };
 
-  // Años: del actual hacia atrás 5.
-  const anios = useMemo(() => {
-    const y = new Date().getFullYear();
-    return Array.from({ length: 6 }, (_, i) => y - i);
+  useEffect(() => {
+    void cargarCooperativas();
   }, []);
 
+  useEffect(() => {
+    if (cooperativaId) {
+      void generarLiquidacion();
+    }
+  }, [cooperativaId]);
+
   return (
-    <main className={styles.wrap}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>Liquidación mensual por cooperativa</h1>
-        <p className={styles.subtitle}>
-          Generá la liquidación de un mes calendario pasado para una cooperativa asignada (US20).
-        </p>
+    <div className={styles.page}>
+      <header className={styles.hero}>
+        <div>
+          <p className={styles.eyebrow}>Admin</p>
+          <h1 className={styles.title}>Liquidacion mensual por cooperativa</h1>
+          <p className={styles.subtitle}>
+            Consulta el cierre mensual de ventas por cooperativa, con cuenta bancaria y PDF listo para revision.
+          </p>
+        </div>
+        <a href="/admin" className={styles.backLink}>
+          Volver al panel
+        </a>
       </header>
 
-      <section className={styles.filtersCard}>
-        <div className={styles.filtersRow}>
-          <label className={styles.field}>
-            <span>Cooperativa</span>
-            <select value={cooperativaId} onChange={(e) => setCooperativaId(Number(e.target.value))}>
-              {cooperativas.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              {cooperativas.length === 0 && <option value={0}>(sin cooperativas asignadas)</option>}
-            </select>
-          </label>
-          <label className={styles.field}>
-            <span>Año</span>
-            <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-              {anios.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </label>
-          <label className={styles.field}>
-            <span>Mes</span>
-            <select value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-              {MESES.slice(1).map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            </select>
-          </label>
+      <section className={styles.filters}>
+        <div className={styles.field}>
+          <label htmlFor="cooperativa">Cooperativa</label>
+          <select id="cooperativa" value={cooperativaId} onChange={(e) => setCooperativaId(e.target.value)}>
+            <option value="">Selecciona</option>
+            {cooperativas.map((coop) => (
+              <option key={coop.id} value={String(coop.id)}>
+                {coop.nombre}
+              </option>
+            ))}
+          </select>
         </div>
+
+        <div className={styles.field}>
+          <label htmlFor="year">Año</label>
+          <select id="year" value={year} onChange={(e) => setYear(e.target.value)}>
+            {yearOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className={styles.field}>
+          <label htmlFor="month">Mes</label>
+          <select id="month" value={month} onChange={(e) => setMonth(e.target.value)}>
+            {MONTH_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className={styles.actions}>
-          <button onClick={generar} className={styles.primary} disabled={loading}>
-            {loading ? 'Generando…' : 'Generar liquidación'}
+          <button className={styles.primaryButton} onClick={() => void generarLiquidacion()} disabled={loading}>
+            Generar liquidacion
           </button>
-          <button onClick={descargarPdf} className={styles.export} disabled={!liq || downloading}>
-            {downloading ? 'Descargando…' : 'Descargar PDF'}
+          <button
+            className={styles.secondaryButton}
+            onClick={() => void descargarPdf()}
+            disabled={loading || downloading || !liquidacion}
+          >
+            {downloading ? 'Descargando PDF...' : 'Descargar PDF'}
           </button>
         </div>
-        {error && <p className={styles.error}>{error}</p>}
       </section>
 
-      {liq && (
-        <>
-          <section className={styles.cards}>
-            <div className={styles.card}>
-              <div className={styles.cardLabel}>Boletos liquidados</div>
-              <div className={styles.cardValue}>{liq.totales.cantidadBoletos}</div>
-            </div>
-            <div className={styles.card}>
-              <div className={styles.cardLabel}>Monto total a transferir</div>
-              <div className={styles.cardValue}>$ {liq.totales.montoTotal.toFixed(2)}</div>
-            </div>
-            <div className={styles.cardSmall}>
-              <div className={styles.cardLabel}>Periodo</div>
-              <div className={styles.cardHint}>
-                {MESES[liq.periodo.month]} {liq.periodo.year}<br />
-                ({liq.periodo.desde} → {liq.periodo.hasta})
+      {error && <div className={styles.errorBox}>{error}</div>}
+
+      <section className={styles.stats}>
+        <article className={styles.statCard}>
+          <span>Boletos vendidos</span>
+          <strong>{liquidacion?.totales.cantidadBoletos ?? 0}</strong>
+        </article>
+        <article className={styles.statCard}>
+          <span>Monto total</span>
+          <strong>${Number(liquidacion?.totales.montoTotal ?? 0).toFixed(2)}</strong>
+        </article>
+        <article className={styles.statCard}>
+          <span>Periodo</span>
+          <strong>
+            {liquidacion ? `${liquidacion.periodo.year}-${String(liquidacion.periodo.month).padStart(2, '0')}` : '—'}
+          </strong>
+        </article>
+      </section>
+
+      <section className={styles.grid}>
+        <div className={styles.card}>
+          <h2>Cooperativa</h2>
+          {liquidacion ? (
+            <dl className={styles.definitionList}>
+              <div>
+                <dt>Nombre</dt>
+                <dd>{liquidacion.cooperativa.nombre}</dd>
               </div>
-            </div>
-          </section>
+              <div>
+                <dt>RUC</dt>
+                <dd>{liquidacion.cooperativa.ruc ?? 'No registrado'}</dd>
+              </div>
+              <div>
+                <dt>Cuenta bancaria</dt>
+                <dd>{liquidacion.cooperativa.cuentaBancaria.numero}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className={styles.helperText}>Genera una liquidacion para ver los datos de la cooperativa.</p>
+          )}
+        </div>
 
-          <section className={styles.subPanel}>
-            <h2 className={styles.subTitle}>Cooperativa</h2>
-            <div className={styles.kv}><span>Nombre:</span><strong>{liq.cooperativa.nombre}</strong></div>
-            <div className={styles.kv}><span>RUC:</span><strong>{liq.cooperativa.ruc || '—'}</strong></div>
-            <div className={styles.kv}><span>Banco:</span><strong>{liq.cooperativa.cuentaBancaria.banco || '(no registrado)'}</strong></div>
-            <div className={styles.kv}><span>Cuenta (parcial):</span><strong>{liq.cooperativa.cuentaBancaria.numero || '(no registrada)'}</strong></div>
-          </section>
+        <div className={styles.card}>
+          <h2>Cuenta bancaria para transferencia</h2>
+          {liquidacion ? (
+            <dl className={styles.definitionList}>
+              <div>
+                <dt>Banco</dt>
+                <dd>{liquidacion.cooperativa.cuentaBancaria.banco}</dd>
+              </div>
+              <div>
+                <dt>Tipo</dt>
+                <dd>{liquidacion.cooperativa.cuentaBancaria.tipo}</dd>
+              </div>
+              <div>
+                <dt>Numero</dt>
+                <dd>{liquidacion.cooperativa.cuentaBancaria.numero}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className={styles.helperText}>La cuenta bancaria se mostrara con el periodo liquidado.</p>
+          )}
+        </div>
+      </section>
 
-          <section className={styles.subPanel}>
-            <h2 className={styles.subTitle}>Desglose por tipo de pasajero</h2>
+      <section className={styles.card}>
+        <h2>Desglose por tipo de pasajero</h2>
+        {loading ? (
+          <div className={styles.loadingBox}>Generando liquidacion...</div>
+        ) : (
+          <div className={styles.tableWrapper}>
             <table className={styles.table}>
-              <thead><tr><th>Tipo</th><th>Boletos</th><th>Monto</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Tipo pasajero</th>
+                  <th>Boletos</th>
+                  <th>Monto</th>
+                </tr>
+              </thead>
               <tbody>
-                {liq.desglosePorTipoPasajero.map((g) => (
-                  <tr key={g.tipoPasajero}>
-                    <td>{g.tipoPasajero}</td>
-                    <td>{g.cantidadBoletos}</td>
-                    <td>$ {g.montoTotal.toFixed(2)}</td>
+                {(liquidacion?.desglosePorTipoPasajero ?? []).map((item) => (
+                  <tr key={item.tipoPasajero}>
+                    <td>{item.tipoPasajero}</td>
+                    <td>{item.cantidadBoletos}</td>
+                    <td>${Number(item.montoTotal).toFixed(2)}</td>
                   </tr>
                 ))}
+                {!liquidacion?.desglosePorTipoPasajero?.length && (
+                  <tr>
+                    <td colSpan={3}>No hay datos para este periodo.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
-          </section>
+          </div>
+        )}
+      </section>
 
-          <section className={styles.subPanel}>
-            <h2 className={styles.subTitle}>Detalle ({liq.detalle.length})</h2>
-            <div className={styles.scrollX}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Boleto</th><th>Compra</th><th>Fecha venta</th><th>Fecha viaje</th>
-                    <th>Tipo</th><th>Estado</th><th>Monto</th>
+      <section className={styles.card}>
+        <h2>Detalle resumido</h2>
+        {loading ? (
+          <div className={styles.loadingBox}>Cargando ventas liquidadas...</div>
+        ) : (
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Compra</th>
+                  <th>Boleto</th>
+                  <th>Fecha venta</th>
+                  <th>Fecha viaje</th>
+                  <th>Tipo pasajero</th>
+                  <th>Estado</th>
+                  <th>Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(liquidacion?.detalle ?? []).map((item) => (
+                  <tr key={item.boletoId}>
+                    <td>#{item.compraId}</td>
+                    <td>#{item.boletoId}</td>
+                    <td>{item.fechaVenta}</td>
+                    <td>{item.fechaViaje}</td>
+                    <td>{item.tipoPasajero}</td>
+                    <td>{item.estadoBoleto}</td>
+                    <td>${Number(item.monto).toFixed(2)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {liq.detalle.slice(0, 200).map((d) => (
-                    <tr key={d.boletoId}>
-                      <td>{d.boletoId}</td>
-                      <td>{d.compraId}</td>
-                      <td>{new Date(d.fechaVenta).toLocaleDateString('es-EC')}</td>
-                      <td>{new Date(d.fechaViaje).toLocaleDateString('es-EC')}</td>
-                      <td>{d.tipoPasajero}</td>
-                      <td>{d.estadoBoleto}</td>
-                      <td>$ {d.monto.toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {liq.detalle.length === 0 && <p className={styles.note}>Sin boletos liquidables en el periodo.</p>}
-              {liq.detalle.length > 200 && <p className={styles.note}>Mostrando primeras 200 filas. Descargá el PDF para el documento oficial.</p>}
-            </div>
-          </section>
-
-          <p className={styles.note}>{liq.criterio}</p>
-        </>
-      )}
-    </main>
+                ))}
+                {!liquidacion?.detalle?.length && (
+                  <tr>
+                    <td colSpan={7}>No hay ventas liquidadas para el mes seleccionado.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }

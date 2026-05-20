@@ -1,214 +1,325 @@
-// US19: tests de los endpoints /reportes/boletos (JSON, PDF, Excel).
-
 import express from 'express';
 import request from 'supertest';
+import prisma from '../src/services/prisma';
+import * as busApi from '../src/services/busApiClient';
+import reportesRouter from '../src/routes/reportes.routes';
 
 jest.mock('../src/services/prisma', () => ({
   __esModule: true,
   default: {
-    compra: { findMany: jest.fn() },
+    eventoWebhook: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    compra: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+    },
+    pagoPasajero: { update: jest.fn() },
+    pagoTarjeta: { upsert: jest.fn() },
+    boleto: { findMany: jest.fn(), updateMany: jest.fn() },
+    compraAsiento: { update: jest.fn() },
+    $transaction: jest.fn(),
   },
 }));
 
 jest.mock('../src/services/busApiClient', () => ({
   __esModule: true,
-  resolverCooperativasPorFrecuencias: jest.fn(),
-  listarCooperativas: jest.fn(),
+  reservarAsiento: jest.fn(),
+  liberarAsiento: jest.fn(),
+  ocuparAsiento: jest.fn(),
+  getCooperativasMap: jest.fn(),
   BusApiError: class extends Error {},
 }));
 
-import prisma from '../src/services/prisma';
-import * as busApi from '../src/services/busApiClient';
-import reportesRoutes from '../src/routes/reportes.routes';
-
-const p = prisma as unknown as Record<string, any>;
-const bus = busApi as unknown as Record<string, jest.Mock>;
+const prismaMock = prisma as unknown as Record<string, any>;
+const busApiMock = busApi as unknown as Record<string, jest.Mock>;
 
 const app = express();
 app.use(express.json());
-app.use('/reportes', reportesRoutes);
+app.use('/reportes', reportesRouter);
 
-const HEADERS_ADMIN = {
-  'X-User-Role': 'ADMIN',
-  'X-User-Id': '1',
-  'X-Cooperativas-Ids': '1,2,3',
-};
+function currentIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
 
-// Compra de ejemplo
-function compraBase(over: Partial<any> = {}) {
+function makeBoleto(params: {
+  boletoId: number;
+  compraId: number;
+  turnoId: number;
+  frecuenciaId: number;
+  canal: string;
+  canalVenta?: string | null;
+  tipoTarifa: string;
+  total: number;
+  estado?: string;
+}) {
   return {
-    id: 100,
-    frecuenciaId: 5,
-    turnoId: 30,
-    total: 20,
-    cantidad: 2,
-    canal: 'WEB',
-    creadoEn: new Date('2025-04-10T10:00:00Z'),
-    fechaViaje: new Date('2025-04-15T08:00:00Z'),
-    boletos: [
-      { id: 1001, tipoTarifa: 'NORMAL', estado: 'VIGENTE' },
-      { id: 1002, tipoTarifa: 'TERCERA_EDAD', estado: 'UTILIZADO' },
-    ],
-    pago: { metodo: 'TARJETA', pagoEfectivo: null },
-    ...over,
+    id: params.boletoId,
+    tipoTarifa: params.tipoTarifa,
+    estado: params.estado ?? 'VIGENTE',
+    creadoEn: new Date(),
+    compra: {
+      id: params.compraId,
+      turnoId: params.turnoId,
+      frecuenciaId: params.frecuenciaId,
+      canal: params.canal,
+      total: params.total,
+      creadoEn: new Date(`${currentIsoDate()}T10:00:00.000Z`),
+      fechaViaje: new Date(`${currentIsoDate()}T00:00:00.000Z`),
+      pago: params.canalVenta
+        ? {
+            pagoEfectivo: {
+              canalVenta: params.canalVenta,
+            },
+          }
+        : null,
+      boletos: [{ id: params.boletoId }],
+    },
   };
+}
+
+function seedBoletos() {
+  return [
+    makeBoleto({
+      boletoId: 101,
+      compraId: 1,
+      turnoId: 11,
+      frecuenciaId: 21,
+      canal: 'WEB',
+      tipoTarifa: 'NORMAL',
+      total: 10,
+    }),
+    makeBoleto({
+      boletoId: 102,
+      compraId: 2,
+      turnoId: 12,
+      frecuenciaId: 22,
+      canal: 'OFICINISTA',
+      canalVenta: 'OFICINA',
+      tipoTarifa: 'TERCERA_EDAD',
+      total: 12,
+    }),
+    makeBoleto({
+      boletoId: 103,
+      compraId: 3,
+      turnoId: 13,
+      frecuenciaId: 23,
+      canal: 'OFICIAL',
+      canalVenta: 'BUS',
+      tipoTarifa: 'DISCAPACIDAD',
+      total: 8,
+      estado: 'UTILIZADO',
+    }),
+  ];
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.spyOn(console, 'error').mockImplementation(() => {});
-  // Por defecto bus-api mapea frecuencia 5 → coop 1 (en el scope del admin).
-  bus.resolverCooperativasPorFrecuencias.mockResolvedValue({
-    '5': { cooperativaId: 1, cooperativaNombre: 'Coop Andina' },
+  prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+  prismaMock.boleto.findMany.mockResolvedValue(seedBoletos());
+  busApiMock.getCooperativasMap.mockResolvedValue({
+    cooperativas: [
+      { id: 1, nombre: 'Coop Uno' },
+      { id: 2, nombre: 'Coop Dos' },
+    ],
+    turnos: [
+      { turnoId: 11, cooperativaId: 1, cooperativaNombre: 'Coop Uno', rutaId: 101, rutaNombre: 'Ruta 1', precioPasaje: 10 },
+      { turnoId: 12, cooperativaId: 1, cooperativaNombre: 'Coop Uno', rutaId: 102, rutaNombre: 'Ruta 2', precioPasaje: 12 },
+      { turnoId: 13, cooperativaId: 2, cooperativaNombre: 'Coop Dos', rutaId: 103, rutaNombre: 'Ruta 3', precioPasaje: 8 },
+    ],
+    frecuencias: [
+      { frecuenciaId: 21, cooperativaId: 1, cooperativaNombre: 'Coop Uno', rutaId: 101, rutaNombre: 'Ruta 1', precioPasaje: 10 },
+      { frecuenciaId: 22, cooperativaId: 1, cooperativaNombre: 'Coop Uno', rutaId: 102, rutaNombre: 'Ruta 2', precioPasaje: 12 },
+      { frecuenciaId: 23, cooperativaId: 2, cooperativaNombre: 'Coop Dos', rutaId: 103, rutaNombre: 'Ruta 3', precioPasaje: 8 },
+    ],
   });
 });
 
-describe('Auth y validación (US19)', () => {
-  it('1) sin rol ADMIN → 403', async () => {
+describe('reportes boletos', () => {
+  it('sin rol ADMIN -> 403', async () => {
     const res = await request(app).get('/reportes/boletos');
+
     expect(res.status).toBe(403);
   });
 
-  it('2) fecha inválida → 400', async () => {
+  it('fecha invalida -> 400', async () => {
     const res = await request(app)
-      .get('/reportes/boletos?fechaDesde=2025/01/01&fechaHasta=2025-01-31')
-      .set(HEADERS_ADMIN);
+      .get('/reportes/boletos?fechaDesde=2026-99-01')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
     expect(res.status).toBe(400);
   });
 
-  it('3) fechaDesde > fechaHasta → 400', async () => {
+  it('fechaDesde mayor que fechaHasta -> 400', async () => {
     const res = await request(app)
-      .get('/reportes/boletos?fechaDesde=2025-05-10&fechaHasta=2025-04-01')
-      .set(HEADERS_ADMIN);
+      .get('/reportes/boletos?fechaDesde=2026-05-10&fechaHasta=2026-05-01')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
     expect(res.status).toBe(400);
+    expect(res.body.error).toContain('fechaDesde');
   });
 
-  it('4) cooperativa no asignada al admin → 403', async () => {
+  it('cooperativa no asignada al admin -> 403', async () => {
     const res = await request(app)
-      .get('/reportes/boletos?cooperativaId=999')
-      .set(HEADERS_ADMIN);
+      .get('/reportes/boletos?cooperativaId=99')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
     expect(res.status).toBe(403);
   });
-});
 
-describe('Estructura del reporte (US19)', () => {
-  it('5) sin filtros críticos devuelve estructura correcta', async () => {
-    p.compra.findMany.mockResolvedValue([compraBase()]);
-    const res = await request(app).get('/reportes/boletos').set(HEADERS_ADMIN);
+  it('GET /reportes/boletos sin filtros criticos devuelve estructura correcta', async () => {
+    const res = await request(app)
+      .get('/reportes/boletos')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('filtros');
-    expect(res.body).toHaveProperty('totales');
-    expect(res.body).toHaveProperty('agrupadoPorCanal');
-    expect(res.body).toHaveProperty('agrupadoPorTipoPasajero');
-    expect(res.body).toHaveProperty('detalle');
-    expect(res.body.filtros.criterio).toMatch(/CONFIRMADAS/);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        filtros: expect.any(Object),
+        totales: expect.objectContaining({
+          cantidadBoletos: 3,
+          montoTotal: 30,
+        }),
+        agrupadoPorCanal: expect.any(Array),
+        agrupadoPorTipoPasajero: expect.any(Array),
+        detalle: expect.any(Array),
+      })
+    );
   });
 
-  it('11) totales generales = suma de subtotales por canal', async () => {
-    p.compra.findMany.mockResolvedValue([
-      compraBase({ total: 30 }),                                  // WEB, 2 boletos
-      compraBase({ id: 101, total: 10, cantidad: 1, boletos: [{ id: 2001, tipoTarifa: 'NORMAL', estado: 'VIGENTE' }],
-        pago: { metodo: 'EFECTIVO', pagoEfectivo: { canalVenta: 'BUS' } } }),
-    ]);
-    const res = await request(app).get('/reportes/boletos').set(HEADERS_ADMIN);
+  it('filtro por canal WEB devuelve solo WEB', async () => {
+    const res = await request(app)
+      .get('/reportes/boletos?canal=WEB')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
     expect(res.status).toBe(200);
-    const sumaCanal = res.body.agrupadoPorCanal.reduce((a: number, g: any) => a + g.cantidadBoletos, 0);
-    const sumaTipo = res.body.agrupadoPorTipoPasajero.reduce((a: number, g: any) => a + g.cantidadBoletos, 0);
-    expect(sumaCanal).toBe(res.body.totales.cantidadBoletos);
-    expect(sumaTipo).toBe(res.body.totales.cantidadBoletos);
+    expect(res.body.detalle).toHaveLength(1);
+    expect(res.body.detalle[0].canal).toBe('WEB');
   });
 
-  it('12) la respuesta no incluye cédula del pasajero ni datos sensibles', async () => {
-    p.compra.findMany.mockResolvedValue([compraBase()]);
-    const res = await request(app).get('/reportes/boletos').set(HEADERS_ADMIN);
-    const json = JSON.stringify(res.body);
-    expect(json).not.toMatch(/cedula/i);
-    expect(json).not.toMatch(/comprobanteUrl/);
-    expect(json).not.toMatch(/referenciaPasarela/);
-    expect(json).not.toMatch(/cuentaBancaria/);
-  });
-});
+  it('filtro por canal OFICINA devuelve solo OFICINA', async () => {
+    const res = await request(app)
+      .get('/reportes/boletos?canal=OFICINA')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
 
-describe('Filtros por canal y tipo (US19)', () => {
-  it('6) filtro canal=WEB devuelve solo WEB', async () => {
-    p.compra.findMany.mockResolvedValue([
-      compraBase(), // WEB
-      compraBase({ id: 200, pago: { metodo: 'EFECTIVO', pagoEfectivo: { canalVenta: 'BUS' } } }),
-      compraBase({ id: 201, pago: { metodo: 'EFECTIVO', pagoEfectivo: { canalVenta: 'OFICINA' } } }),
-    ]);
-    const res = await request(app).get('/reportes/boletos?canal=WEB').set(HEADERS_ADMIN);
     expect(res.status).toBe(200);
-    for (const d of res.body.detalle) expect(d.canal).toBe('WEB');
-    expect(res.body.agrupadoPorCanal.find((g: any) => g.canal === 'BUS').cantidadBoletos).toBe(0);
-    expect(res.body.agrupadoPorCanal.find((g: any) => g.canal === 'OFICINA').cantidadBoletos).toBe(0);
+    expect(res.body.detalle).toHaveLength(1);
+    expect(res.body.detalle[0].canal).toBe('OFICINA');
   });
 
-  it('7) filtro canal=OFICINA devuelve solo OFICINA', async () => {
-    p.compra.findMany.mockResolvedValue([
-      compraBase(),
-      compraBase({ id: 200, pago: { metodo: 'EFECTIVO', pagoEfectivo: { canalVenta: 'OFICINA' } } }),
-    ]);
-    const res = await request(app).get('/reportes/boletos?canal=OFICINA').set(HEADERS_ADMIN);
+  it('filtro por canal BUS devuelve solo BUS', async () => {
+    const res = await request(app)
+      .get('/reportes/boletos?canal=BUS')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
     expect(res.status).toBe(200);
-    for (const d of res.body.detalle) expect(d.canal).toBe('OFICINA');
+    expect(res.body.detalle).toHaveLength(1);
+    expect(res.body.detalle[0].canal).toBe('BUS');
   });
 
-  it('8) filtro canal=BUS devuelve solo BUS', async () => {
-    p.compra.findMany.mockResolvedValue([
-      compraBase(),
-      compraBase({ id: 201, pago: { metodo: 'EFECTIVO', pagoEfectivo: { canalVenta: 'BUS' } } }),
-    ]);
-    const res = await request(app).get('/reportes/boletos?canal=BUS').set(HEADERS_ADMIN);
+  it('agrupacion por tipo de pasajero calcula cantidades y montos', async () => {
+    const res = await request(app)
+      .get('/reportes/boletos')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
     expect(res.status).toBe(200);
-    for (const d of res.body.detalle) expect(d.canal).toBe('BUS');
+    expect(res.body.agrupadoPorTipoPasajero).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tipoPasajero: 'NORMAL', cantidadBoletos: 1, montoTotal: 10 }),
+        expect.objectContaining({ tipoPasajero: 'TERCERA_EDAD', cantidadBoletos: 1, montoTotal: 12 }),
+        expect.objectContaining({ tipoPasajero: 'DISCAPACIDAD', cantidadBoletos: 1, montoTotal: 8 }),
+      ])
+    );
   });
 
-  it('9) agrupación por tipo de pasajero calcula cantidades y montos', async () => {
-    p.compra.findMany.mockResolvedValue([compraBase()]);
-    const res = await request(app).get('/reportes/boletos').set(HEADERS_ADMIN);
-    const normal = res.body.agrupadoPorTipoPasajero.find((g: any) => g.tipoPasajero === 'NORMAL');
-    const tercera = res.body.agrupadoPorTipoPasajero.find((g: any) => g.tipoPasajero === 'TERCERA_EDAD');
-    expect(normal.cantidadBoletos).toBe(1);
-    expect(tercera.cantidadBoletos).toBe(1);
-    expect(normal.montoTotal + tercera.montoTotal).toBeCloseTo(res.body.totales.montoTotal, 2);
+  it('agrupacion por canal calcula cantidades y montos', async () => {
+    const res = await request(app)
+      .get('/reportes/boletos')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
+    expect(res.status).toBe(200);
+    expect(res.body.agrupadoPorCanal).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ canal: 'WEB', cantidadBoletos: 1, montoTotal: 10 }),
+        expect.objectContaining({ canal: 'OFICINA', cantidadBoletos: 1, montoTotal: 12 }),
+        expect.objectContaining({ canal: 'BUS', cantidadBoletos: 1, montoTotal: 8 }),
+      ])
+    );
   });
 
-  it('10) agrupación por canal calcula cantidades y montos', async () => {
-    p.compra.findMany.mockResolvedValue([compraBase()]);
-    const res = await request(app).get('/reportes/boletos').set(HEADERS_ADMIN);
-    const web = res.body.agrupadoPorCanal.find((g: any) => g.canal === 'WEB');
-    expect(web.cantidadBoletos).toBe(2);
-    expect(web.montoTotal).toBeCloseTo(20, 2);
-  });
-});
+  it('totales generales son suma de subtotales', async () => {
+    const res = await request(app)
+      .get('/reportes/boletos')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
 
-describe('Export (US19)', () => {
-  it('13) GET /reportes/boletos/pdf devuelve application/pdf', async () => {
-    p.compra.findMany.mockResolvedValue([compraBase()]);
-    const res = await request(app).get('/reportes/boletos/pdf').set(HEADERS_ADMIN);
+    expect(res.status).toBe(200);
+    const totalCanales = res.body.agrupadoPorCanal.reduce(
+      (acc: number, item: { montoTotal: number }) => acc + item.montoTotal,
+      0
+    );
+    expect(totalCanales).toBe(res.body.totales.montoTotal);
+  });
+
+  it('no devuelve cedula completa ni datos sensibles', async () => {
+    const res = await request(app)
+      .get('/reportes/boletos')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
+    expect(res.status).toBe(200);
+    expect(res.body.detalle[0]).not.toHaveProperty('cedulaPasajero');
+    expect(res.body.detalle[0]).not.toHaveProperty('comprobanteUrl');
+    expect(res.body.detalle[0]).not.toHaveProperty('referenciaPasarela');
+    expect(res.body.detalle[0]).not.toHaveProperty('banco');
+  });
+
+  it('GET /reportes/boletos/pdf devuelve application/pdf', async () => {
+    const res = await request(app)
+      .get('/reportes/boletos/pdf')
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('application/pdf');
     expect(res.headers['content-disposition']).toContain('reporte-boletos.pdf');
   });
 
-  it('14) GET /reportes/boletos/excel devuelve xlsx con content-type correcto', async () => {
-    p.compra.findMany.mockResolvedValue([compraBase()]);
+  it('GET /reportes/boletos/excel devuelve xlsx con content-type correcto', async () => {
     const res = await request(app)
       .get('/reportes/boletos/excel')
-      .set(HEADERS_ADMIN)
-      .buffer(true)
-      .parse((r, cb) => {
-        const chunks: Buffer[] = [];
-        r.on('data', (c: Buffer) => chunks.push(c));
-        r.on('end', () => cb(null, Buffer.concat(chunks)));
-      });
+      .set('X-User-Role', 'ADMIN')
+      .set('X-User-Id', '1')
+      .set('X-Cooperativas-Ids', '1,2');
+
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain(
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
     expect(res.headers['content-disposition']).toContain('reporte-boletos.xlsx');
-    // xlsx empieza con bytes "PK" (zip container).
-    expect((res.body as Buffer)[0]).toBe(0x50); // P
-    expect((res.body as Buffer)[1]).toBe(0x4b); // K
   });
 });

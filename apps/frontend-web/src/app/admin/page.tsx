@@ -52,6 +52,10 @@ export default function AdminDashboard() {
       <header className={styles.header}>
         <h1 className={styles.title}>Panel de Administración</h1>
         <p className={styles.subtitle}>Gestión de flota, rutas y logística (Sprint 1)</p>
+        <div style={{ marginTop: '14px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+          <a href="/admin/reportes">Ir a reportes administrativos</a>
+          <a href="/admin/liquidaciones">Ir a liquidaciones mensuales</a>
+        </div>
       </header>
 
       <nav className={styles.tabs}>
