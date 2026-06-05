@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { authHeaders } from '@/lib/auth';
 import styles from './transferencias.module.css';
 
 const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://localhost:3003';
-const AUTH_HEADERS = { 'X-User-Role': 'OFICINISTA', 'X-User-Id': '1' };
 const MIN_MOTIVO = 5;
 
 type Tab = 'pendientes' | 'historial';
@@ -232,7 +232,7 @@ export default function OficinistaTransferenciasPage() {
       setCargando(true);
       try {
         const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${selectedId}`, {
-          headers: AUTH_HEADERS,
+          headers: authHeaders(),
         });
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const data: Detalle = await res.json();
@@ -262,7 +262,7 @@ export default function OficinistaTransferenciasPage() {
     (async () => {
       try {
         const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${detalle.id}/comprobante`, {
-          headers: AUTH_HEADERS,
+          headers: authHeaders(),
         });
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const blob = await res.blob();
@@ -289,7 +289,7 @@ export default function OficinistaTransferenciasPage() {
     try {
       const qs = buildQueryString({ cedula: filtros.cedula });
       const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/pendientes${qs}`, {
-        headers: AUTH_HEADERS,
+        headers: authHeaders(),
       });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const data: Pendiente[] = await res.json();
@@ -314,7 +314,7 @@ export default function OficinistaTransferenciasPage() {
         fechaHasta: filtros.fechaHasta,
       });
       const res = await fetch(`${TICKET_API_URL}/aprobaciones/historial-pagos${qs}`, {
-        headers: AUTH_HEADERS,
+        headers: authHeaders(),
       });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const data: HistorialPago[] = await res.json();
@@ -362,7 +362,7 @@ export default function OficinistaTransferenciasPage() {
     try {
       const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${detalle.id}/aprobar`, {
         method: 'POST',
-        headers: { ...AUTH_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
       const data = await res.json().catch(() => ({}));
@@ -394,7 +394,7 @@ export default function OficinistaTransferenciasPage() {
     try {
       const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${detalle.id}/rechazar`, {
         method: 'POST',
-        headers: { ...AUTH_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ motivo: motivo.trim() }),
       });
       const data = await res.json().catch(() => ({}));

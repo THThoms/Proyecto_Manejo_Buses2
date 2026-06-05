@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SeatMap, { Asiento } from '@/components/SeatMap';
-import { clearSession } from '@/lib/auth';
+import { authHeaders, clearSession } from '@/lib/auth';
 import styles from './cobrar.module.css';
 
 const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://localhost:3003';
@@ -213,10 +213,10 @@ export default function CobrarOficinaPage() {
       setCargandoPanel(true);
       const [pendientesRes, historialRes] = await Promise.all([
         fetch(`${TICKET_API_URL}/pagos/transferencia/pendientes`, {
-          headers: { 'X-User-Role': 'OFICINISTA', 'X-User-Id': OFICINISTA_ID },
+          headers: authHeaders(),
         }),
         fetch(`${TICKET_API_URL}/aprobaciones/historial-pagos?limit=6`, {
-          headers: { 'X-User-Role': 'OFICINISTA', 'X-User-Id': OFICINISTA_ID },
+          headers: authHeaders(),
         }),
       ]);
 
@@ -364,8 +364,7 @@ export default function CobrarOficinaPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-role': 'OFICINISTA',
-          'x-user-id': OFICINISTA_ID,
+          ...authHeaders(),
         },
         body: JSON.stringify({
           usuarioId: USUARIO_DEMO_ID,
@@ -402,8 +401,7 @@ export default function CobrarOficinaPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-role': 'OFICINISTA',
-          'x-user-id': OFICINISTA_ID,
+          ...authHeaders(),
         },
         body: JSON.stringify({ compraId, montoRecibido: montoNum }),
       });

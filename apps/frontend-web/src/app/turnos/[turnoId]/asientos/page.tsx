@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import SeatMap, { Asiento } from '@/components/SeatMap';
+import { getUser, authHeaders } from '@/lib/auth';
 import styles from './asientos.module.css';
 
 const BUS_API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://localhost:3002';
@@ -134,11 +135,19 @@ export default function AsientosPage() {
 
     setSubmitting(true);
     try {
+      const user = getUser();
+      if (!user) {
+        throw new Error('Debes iniciar sesión para realizar la compra.');
+      }
+
       const res = await fetch(`${TICKET_API_URL}/compras`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders(), // Añadimos el JWT por seguridad
+        },
         body: JSON.stringify({
-          usuarioId: USUARIO_ID_DEMO,
+          usuarioId: user.id,
           frecuenciaId: rutaIdState,
           turnoId,
           fechaViaje: fechaState || new Date().toISOString().split('T')[0],

@@ -36,7 +36,7 @@ export default function LoginPage() {
         const pwaUrl = process.env.NEXT_PUBLIC_PWA_URL || 'http://localhost:3011';
         window.location.href = `${pwaUrl}/chofer/cobrar`;
       } else {
-        router.push('/historial');
+        router.push('/');
       }
     } catch (err: any) {
       const msg = err?.message ?? 'Error al iniciar sesión';
