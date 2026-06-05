@@ -232,10 +232,10 @@ beforeEach(() => {
 });
 
 describe('liquidacion mensual por cooperativa', () => {
-  it('sin rol ADMIN -> 403', async () => {
+  it('sin rol ADMIN -> 401', async () => {
     const res = await request(app).get(`/liquidaciones/cooperativa?${queryForPreviousMonth()}`);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('cooperativaId faltante -> 400', async () => {
