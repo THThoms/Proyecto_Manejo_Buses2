@@ -51,6 +51,15 @@ function endOfCurrentMonth(): string {
 }
 
 function parseAdminContext(req: Request) {
+  const reqAny = req as any;
+  if (reqAny.adminUser) {
+    return {
+      role: reqAny.adminUser.adminRole,
+      userId: reqAny.adminUser.usuarioId,
+      cooperativasIds: reqAny.adminUser.cooperativasIds,
+    };
+  }
+  // Fallback por si acaso
   const role = (req.header('x-user-role') || '').trim().toUpperCase();
   const userId = Number(req.header('x-user-id') || '0');
   const cooperativasIds = (req.header('x-cooperativas-ids') || '')
