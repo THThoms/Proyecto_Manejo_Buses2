@@ -58,7 +58,7 @@ export const register = async (req: Request, res: Response) => {
     const u = await prisma.usuario.create({
       data: { nombre: nombre.trim(), email, passwordHash },
     });
-    const token = signSessionToken(u.id, u.email);
+    const token = signSessionToken(u.id, u.email, []);
     return res.status(201).json({ token, usuario: sanitizeUsuario(u) });
   } catch (err) {
     console.error('Error en register:', err);
@@ -90,7 +90,11 @@ export const login = async (req: Request, res: Response) => {
     if (!ok) {
       return res.status(401).json({ error: 'credenciales inválidas' });
     }
-    const token = signSessionToken(u.id, u.email);
+    // Extraer nombres de roles activos para incluirlos en el JWT.
+    const roles = u.roles
+      .filter((ur) => ur.estado === 'ACTIVO')
+      .map((ur) => ur.rol?.nombre ?? '');
+    const token = signSessionToken(u.id, u.email, roles);
     return res.json({ token, usuario: sanitizeUsuario(u) });
   } catch (err) {
     console.error('Error en login:', err);
