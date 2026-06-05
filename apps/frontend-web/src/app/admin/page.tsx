@@ -92,8 +92,8 @@ export default function AdminDashboard() {
         <div className={styles.actions}>
           <h2 className={styles.contentTitle}>Listado de {activeTab}</h2>
           {activeTab === 'turnos' && (
-            <button className={styles.actionButton} onClick={handleGenerarTurnos}>
-              ⚡ Generar Turnos Automáticos (US05)
+            <button onClick={handleGenerarTurnos} className={styles.btnActionSecondary}>
+              ⚡ Generar Turnos Automáticos
             </button>
           )}
           <button className={styles.addButton}>+ Nuevo {activeTab.slice(0, -1)}</button>

@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import styles from './configuracion.module.css';
+import { authHeaders } from '@/lib/auth';
 
 const BUS_API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://localhost:3002';
 
@@ -62,7 +63,7 @@ export default function ConfiguracionAdminPage() {
     try {
       const res = await fetch(`${BUS_API_URL}/config/app`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-User-Role': 'ADMIN' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(cfg),
       });
       const body = await res.json().catch(() => ({}));
