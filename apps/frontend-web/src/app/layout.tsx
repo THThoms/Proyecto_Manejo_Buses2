@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import GlobalNavbar from '@/components/GlobalNavbar';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -14,6 +15,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
+        <GlobalNavbar />
         <div className="app-container">
           {children}
         </div>
