@@ -9,6 +9,7 @@ export interface AuthUser {
   nombre: string;
   email: string;
   estado?: string;
+  roles?: string[];
 }
 
 export const AUTH_API_URL =

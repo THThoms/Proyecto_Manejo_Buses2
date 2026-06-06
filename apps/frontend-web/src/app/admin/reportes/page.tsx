@@ -2,14 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import styles from './reportes.module.css';
+import { authHeaders, getUser } from '@/lib/auth';
 
 const BUS_API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://127.0.0.1:3002';
 const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://127.0.0.1:3003';
-const ADMIN_HEADERS = {
-  'X-User-Role': 'ADMIN',
-  'X-User-Id': '1',
-  'X-Cooperativas-Ids': '1,2,3',
-};
 
 type Cooperativa = { id: number; nombre: string };
 type ResumenCanal = { canal: string; cantidadBoletos: number; montoTotal: number };
@@ -59,16 +55,21 @@ function currentMonthRange() {
   };
 }
 
-function parseAssignedCooperativas() {
-  return ADMIN_HEADERS['X-Cooperativas-Ids']
-    .split(',')
-    .map((value) => Number(value.trim()))
-    .filter((value, index, arr) => Number.isInteger(value) && value > 0 && arr.indexOf(value) === index);
-}
-
 export default function AdminReportesPage() {
   const defaults = useMemo(() => currentMonthRange(), []);
-  const assignedCooperativas = useMemo(() => parseAssignedCooperativas(), []);
+
+  // US21: leer JWT + cooperativas del usuario logueado en lugar de headers hardcoded
+  const adminHeaders = useMemo(() => {
+    const user = getUser();
+    const coops = (user as { cooperativasIds?: number[] } | null)?.cooperativasIds;
+    const coopsHeader = coops?.join(',') ?? '1';
+    return { ...authHeaders(), 'X-Cooperativas-Ids': coopsHeader };
+  }, []);
+
+  const assignedCooperativas = useMemo(() => {
+    const user = getUser();
+    return (user as { cooperativasIds?: number[] } | null)?.cooperativasIds ?? [1];
+  }, []);
 
   const [fechaDesde, setFechaDesde] = useState(defaults.fechaDesde);
   const [fechaHasta, setFechaHasta] = useState(defaults.fechaHasta);
@@ -113,7 +114,7 @@ export default function AdminReportesPage() {
     setError(null);
     try {
       const res = await fetch(`${TICKET_API_URL}/reportes/boletos?${buildQuery()}`, {
-        headers: ADMIN_HEADERS,
+        headers: adminHeaders,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -133,7 +134,7 @@ export default function AdminReportesPage() {
     setError(null);
     try {
       const res = await fetch(`${TICKET_API_URL}/reportes/boletos/${formato}?${buildQuery()}`, {
-        headers: ADMIN_HEADERS,
+        headers: adminHeaders,
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -218,11 +219,7 @@ export default function AdminReportesPage() {
         </div>
         <div className={styles.field}>
           <label htmlFor="tipoPasajero">Tipo pasajero</label>
-          <select
-            id="tipoPasajero"
-            value={tipoPasajero}
-            onChange={(e) => setTipoPasajero(e.target.value)}
-          >
+          <select id="tipoPasajero" value={tipoPasajero} onChange={(e) => setTipoPasajero(e.target.value)}>
             <option value="TODOS">Todos</option>
             <option value="NORMAL">Normal</option>
             <option value="TERCERA_EDAD">Tercera edad</option>
@@ -238,18 +235,10 @@ export default function AdminReportesPage() {
           <button className={styles.secondaryButton} onClick={limpiar} disabled={loading}>
             Limpiar
           </button>
-          <button
-            className={styles.secondaryButton}
-            onClick={() => void descargar('pdf')}
-            disabled={loading || exporting !== null}
-          >
+          <button className={styles.secondaryButton} onClick={() => void descargar('pdf')} disabled={loading || exporting !== null}>
             {exporting === 'pdf' ? 'Exportando PDF...' : 'Exportar PDF'}
           </button>
-          <button
-            className={styles.secondaryButton}
-            onClick={() => void descargar('excel')}
-            disabled={loading || exporting !== null}
-          >
+          <button className={styles.secondaryButton} onClick={() => void descargar('excel')} disabled={loading || exporting !== null}>
             {exporting === 'excel' ? 'Exportando Excel...' : 'Exportar Excel'}
           </button>
         </div>
@@ -276,25 +265,15 @@ export default function AdminReportesPage() {
         <div className={styles.card}>
           <h2>Subtotales por canal</h2>
           <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Canal</th>
-                <th>Boletos</th>
-                <th>Monto</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Canal</th><th>Boletos</th><th>Monto</th></tr></thead>
             <tbody>
               {(reporte?.agrupadoPorCanal ?? []).map((item) => (
                 <tr key={item.canal}>
-                  <td>{item.canal}</td>
-                  <td>{item.cantidadBoletos}</td>
-                  <td>${Number(item.montoTotal).toFixed(2)}</td>
+                  <td>{item.canal}</td><td>{item.cantidadBoletos}</td><td>${Number(item.montoTotal).toFixed(2)}</td>
                 </tr>
               ))}
               {!reporte?.agrupadoPorCanal?.length && !loading && (
-                <tr>
-                  <td colSpan={3}>Sin datos para este filtro.</td>
-                </tr>
+                <tr><td colSpan={3}>Sin datos para este filtro.</td></tr>
               )}
             </tbody>
           </table>
@@ -303,25 +282,15 @@ export default function AdminReportesPage() {
         <div className={styles.card}>
           <h2>Subtotales por tipo de pasajero</h2>
           <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Boletos</th>
-                <th>Monto</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Tipo</th><th>Boletos</th><th>Monto</th></tr></thead>
             <tbody>
               {(reporte?.agrupadoPorTipoPasajero ?? []).map((item) => (
                 <tr key={item.tipoPasajero}>
-                  <td>{item.tipoPasajero}</td>
-                  <td>{item.cantidadBoletos}</td>
-                  <td>${Number(item.montoTotal).toFixed(2)}</td>
+                  <td>{item.tipoPasajero}</td><td>{item.cantidadBoletos}</td><td>${Number(item.montoTotal).toFixed(2)}</td>
                 </tr>
               ))}
               {!reporte?.agrupadoPorTipoPasajero?.length && !loading && (
-                <tr>
-                  <td colSpan={3}>Sin datos para este filtro.</td>
-                </tr>
+                <tr><td colSpan={3}>Sin datos para este filtro.</td></tr>
               )}
             </tbody>
           </table>
@@ -331,9 +300,7 @@ export default function AdminReportesPage() {
       <section className={styles.card}>
         <div className={styles.sectionHeader}>
           <h2>Detalle</h2>
-          <span>
-            {reporte?.pagination.total ?? 0} registros · pagina {reporte?.pagination.page ?? 1}
-          </span>
+          <span>{reporte?.pagination.total ?? 0} registros · pagina {reporte?.pagination.page ?? 1}</span>
         </div>
         {loading ? (
           <div className={styles.loadingBox}>Cargando reporte...</div>
@@ -342,35 +309,22 @@ export default function AdminReportesPage() {
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Compra</th>
-                  <th>Boleto</th>
-                  <th>Fecha compra</th>
-                  <th>Fecha viaje</th>
-                  <th>Cooperativa</th>
-                  <th>Canal</th>
-                  <th>Tipo pasajero</th>
-                  <th>Estado</th>
-                  <th>Monto</th>
+                  <th>Compra</th><th>Boleto</th><th>Fecha compra</th><th>Fecha viaje</th>
+                  <th>Cooperativa</th><th>Canal</th><th>Tipo pasajero</th><th>Estado</th><th>Monto</th>
                 </tr>
               </thead>
               <tbody>
                 {(reporte?.detalle ?? []).map((item) => (
                   <tr key={item.boletoId}>
-                    <td>#{item.compraId}</td>
-                    <td>#{item.boletoId}</td>
-                    <td>{item.fechaCompra}</td>
-                    <td>{item.fechaViaje}</td>
-                    <td>{item.cooperativaNombre}</td>
-                    <td>{item.canal}</td>
-                    <td>{item.tipoPasajero}</td>
-                    <td>{item.estadoBoleto}</td>
+                    <td>#{item.compraId}</td><td>#{item.boletoId}</td>
+                    <td>{item.fechaCompra}</td><td>{item.fechaViaje}</td>
+                    <td>{item.cooperativaNombre}</td><td>{item.canal}</td>
+                    <td>{item.tipoPasajero}</td><td>{item.estadoBoleto}</td>
                     <td>${Number(item.monto).toFixed(2)}</td>
                   </tr>
                 ))}
                 {!reporte?.detalle?.length && (
-                  <tr>
-                    <td colSpan={9}>No hay boletos para los filtros seleccionados.</td>
-                  </tr>
+                  <tr><td colSpan={9}>No hay boletos para los filtros seleccionados.</td></tr>
                 )}
               </tbody>
             </table>

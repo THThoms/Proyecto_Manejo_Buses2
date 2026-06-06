@@ -195,18 +195,12 @@ export const updateTurnoGps = async (req: Request, res: Response) => {
 
   try {
     // 1. Actualizar coordenadas del turno
-    // TODO: Fix TypeScript types for latActual and lngActual
-    // const turno = await prisma.turno.update({
-    //   where: { id: turnoId },
-    //   data: {
-    //     latActual: latNum,
-    //     lngActual: lngNum,
-    //   },
-    // });
-
-    // Temporary workaround: fetch turno without update
-    const turno = await prisma.turno.findUnique({
+    const turno = await prisma.turno.update({
       where: { id: turnoId },
+      data: {
+        latActual: latNum,
+        lngActual: lngNum,
+      },
       include: { bus: true, ruta: true, chofer: true },
     });
 

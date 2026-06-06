@@ -7,10 +7,13 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
 };
 
+import GlobalNavbar from '../components/GlobalNavbar';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
       <body>
+        <GlobalNavbar />
         {children}
         <script
           dangerouslySetInnerHTML={{

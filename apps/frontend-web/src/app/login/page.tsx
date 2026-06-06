@@ -26,7 +26,18 @@ export default function LoginPage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
       saveSession(body.token, body.usuario);
-      router.push('/historial');
+      const roles: string[] = body.usuario?.roles || [];
+      if (roles.includes('ADMIN') || roles.includes('DUENO')) {
+        router.push('/admin');
+      } else if (roles.includes('OFICINISTA')) {
+        router.push('/oficinista');
+      } else if (roles.includes('OFICIAL')) {
+        // Los choferes usan la PWA (puerto 3011). Redirigimos automáticamente.
+        const pwaUrl = process.env.NEXT_PUBLIC_PWA_URL || 'http://localhost:3011';
+        window.location.href = `${pwaUrl}/chofer/cobrar`;
+      } else {
+        router.push('/');
+      }
     } catch (err: any) {
       const msg = err?.message ?? 'Error al iniciar sesión';
       // "Failed to fetch" = auth-api inalcanzable. Damos un mensaje útil con la URL.
@@ -59,6 +70,10 @@ export default function LoginPage() {
       </form>
       <p className={styles.foot}>
         ¿No tenés cuenta? <Link href="/registro">Registrate</Link>
+      </p>
+      <p className={styles.foot} style={{ marginTop: '8px', fontSize: '12px', color: '#9ca3af' }}>
+        ¿Eres chofer? Usá la app de operaciones en{' '}
+        <a href="http://localhost:3011/login" style={{ color: '#2563eb' }}>localhost:3011</a>
       </p>
     </main>
   );

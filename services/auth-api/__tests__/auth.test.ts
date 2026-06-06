@@ -88,7 +88,7 @@ describe('POST /auth/login', () => {
     const bcrypt = require('bcryptjs');
     const hash = await bcrypt.hash('secreto12', 10);
     p.usuario.findUnique.mockResolvedValue({
-      id: 5, nombre: 'X', email: 'x@x.com', estado: 'ACTIVO', passwordHash: hash, creadoEn: new Date(),
+      id: 5, nombre: 'X', email: 'x@x.com', estado: 'ACTIVO', passwordHash: hash, creadoEn: new Date(), roles: [],
     });
     const res = await request(app).post('/auth/login').send({ email: 'x@x.com', password: 'secreto12' });
     expect(res.status).toBe(200);

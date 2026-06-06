@@ -26,7 +26,15 @@ function validarPassword(pwd: string): string | null {
 function sanitizeUsuario(u: any) {
   // CA #9: no exponemos passwordHash.
   if (!u) return null;
-  return { id: u.id, nombre: u.nombre, email: u.email, estado: u.estado, creadoEn: u.creadoEn };
+  const roles = u.roles ? u.roles.map((ur: any) => ur.rol?.nombre || ur.rolName) : [];
+  return {
+    id: u.id,
+    nombre: u.nombre,
+    email: u.email,
+    estado: u.estado,
+    creadoEn: u.creadoEn,
+    roles,
+  };
 }
 
 // POST /auth/register
@@ -50,7 +58,7 @@ export const register = async (req: Request, res: Response) => {
     const u = await prisma.usuario.create({
       data: { nombre: nombre.trim(), email, passwordHash },
     });
-    const token = signSessionToken(u.id, u.email);
+    const token = signSessionToken(u.id, u.email, []);
     return res.status(201).json({ token, usuario: sanitizeUsuario(u) });
   } catch (err) {
     console.error('Error en register:', err);
@@ -65,7 +73,16 @@ export const login = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'email y password requeridos' });
   }
   try {
-    const u = await prisma.usuario.findUnique({ where: { email } });
+    const u = await prisma.usuario.findUnique({
+      where: { email },
+      include: {
+        roles: {
+          include: {
+            rol: true,
+          },
+        },
+      },
+    });
     if (!u || u.estado !== 'ACTIVO') {
       return res.status(401).json({ error: 'credenciales inválidas' });
     }
@@ -73,7 +90,11 @@ export const login = async (req: Request, res: Response) => {
     if (!ok) {
       return res.status(401).json({ error: 'credenciales inválidas' });
     }
-    const token = signSessionToken(u.id, u.email);
+    // Extraer nombres de roles activos para incluirlos en el JWT.
+    const roles = u.roles
+      .filter((ur) => ur.estado === 'ACTIVO')
+      .map((ur) => ur.rol?.nombre ?? '');
+    const token = signSessionToken(u.id, u.email, roles);
     return res.json({ token, usuario: sanitizeUsuario(u) });
   } catch (err) {
     console.error('Error en login:', err);
@@ -85,7 +106,16 @@ export const login = async (req: Request, res: Response) => {
 export const me = async (req: Request, res: Response) => {
   if (!req.user) return res.status(401).json({ error: 'no autenticado' });
   try {
-    const u = await prisma.usuario.findUnique({ where: { id: req.user.usuarioId } });
+    const u = await prisma.usuario.findUnique({
+      where: { id: req.user.usuarioId },
+      include: {
+        roles: {
+          include: {
+            rol: true,
+          },
+        },
+      },
+    });
     if (!u) return res.status(404).json({ error: 'usuario no encontrado' });
     return res.json({ usuario: sanitizeUsuario(u) });
   } catch (err) {

@@ -1,15 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
+import { extractAndVerify } from '../services/jwtVerify';
 
 /**
- * US19: middleware que valida que el caller sea ADMIN y extrae la lista de
- * cooperativas asignadas desde el header `X-Cooperativas-Ids`.
+ * US21 (SEC-01): middleware que valida el JWT del caller y verifica que tenga
+ * rol ADMIN o DUENO. El token debe venir en el header:
+ *   Authorization: Bearer <token>
  *
- * Mientras US21 (login real) no exista, mockeamos identidad via headers:
- *   - `X-User-Role: ADMIN`
- *   - `X-User-Id: <number>`
- *   - `X-Cooperativas-Ids: 1,2,3`
+ * También extrae la lista de cooperativas asignadas desde el header
+ * `X-Cooperativas-Ids` (pendiente de migrar a auth-api en el futuro).
  *
- * TODO Sprint 2: reemplazar por validación de JWT + lectura de auth-api.
+ * Modo desarrollo: si no hay token JWT pero NODE_ENV !== 'production',
+ * acepta el header X-User-Role como fallback para no romper tests locales.
  */
 
 declare global {
@@ -19,21 +20,45 @@ declare global {
       adminUser?: {
         usuarioId: number;
         cooperativasIds: number[];
+        adminRole: string;
       };
     }
   }
 }
 
+const ROLES_ADMIN = new Set(['ADMIN', 'DUENO']);
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const role = req.header('x-user-role');
-  if (role !== 'ADMIN') {
-    return res.status(403).json({ error: 'Acceso restringido al rol ADMIN' });
+  let usuarioId: number;
+  let userRoles: string[] = [];
+
+  try {
+    const payload = extractAndVerify(req.header('authorization'));
+
+    if (payload) {
+      // ── Flujo normal: JWT válido presente ──────────────────────────────────
+      usuarioId = payload.sub;
+      userRoles = payload.roles;
+    } else if (process.env.NODE_ENV !== 'production') {
+      // ── Fallback solo en desarrollo/test: acepta header mock ───────────────
+      const roleHeader = req.header('x-user-role') ?? '';
+      const idHeader = Number(req.header('x-user-id') ?? '0');
+      if (!roleHeader || !Number.isInteger(idHeader) || idHeader <= 0) {
+        return res.status(401).json({ error: 'token requerido' });
+      }
+      userRoles = [roleHeader.toUpperCase()];
+      usuarioId = idHeader;
+    } else {
+      return res.status(401).json({ error: 'token requerido' });
+    }
+  } catch {
+    return res.status(401).json({ error: 'token inválido o expirado' });
   }
 
-  const userIdHeader = req.header('x-user-id');
-  const usuarioId = Number(userIdHeader);
-  if (!Number.isInteger(usuarioId) || usuarioId <= 0) {
-    return res.status(400).json({ error: 'X-User-Id requerido' });
+  const hasAdminRole = userRoles.some((r) => ROLES_ADMIN.has(r));
+  console.log('[requireAdmin] hasAdminRole:', hasAdminRole, 'userRoles:', userRoles);
+  if (!hasAdminRole) {
+    return res.status(403).json({ error: 'Acceso restringido al rol ADMIN' });
   }
 
   const coopsHeader = req.header('x-cooperativas-ids') ?? '';
@@ -48,6 +73,10 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
     });
   }
 
-  req.adminUser = { usuarioId, cooperativasIds };
+  req.adminUser = { 
+    usuarioId: usuarioId!, 
+    cooperativasIds,
+    adminRole: userRoles.find(r => ROLES_ADMIN.has(r)) || 'ADMIN' 
+  };
   next();
 }

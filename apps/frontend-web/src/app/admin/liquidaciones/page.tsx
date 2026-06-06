@@ -1,15 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import styles from './liquidaciones.module.css';
+import { authHeaders, getUser } from '@/lib/auth';
 
 const BUS_API_URL = process.env.NEXT_PUBLIC_BUS_API_URL || 'http://127.0.0.1:3002';
 const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://127.0.0.1:3003';
-const ADMIN_HEADERS = {
-  'X-User-Role': 'ADMIN',
-  'X-User-Id': '1',
-  'X-Cooperativas-Ids': '1,2,3',
-};
 
 type Cooperativa = { id: number; nombre: string };
 type CuentaBancaria = { banco: string; tipo: string; numero: string };
@@ -44,11 +39,17 @@ type LiquidacionResponse = {
   detalle: LiquidacionDetalle[];
 };
 
+import styles from './liquidaciones.module.css';
+
+function getAdminHeaders() {
+  const user = getUser();
+  const coops = (user as { cooperativasIds?: number[] } | null)?.cooperativasIds;
+  return { ...authHeaders(), 'X-Cooperativas-Ids': coops?.join(',') ?? '1' };
+}
+
 function parseAssignedCooperativas() {
-  return ADMIN_HEADERS['X-Cooperativas-Ids']
-    .split(',')
-    .map((value) => Number(value.trim()))
-    .filter((value, index, arr) => Number.isInteger(value) && value > 0 && arr.indexOf(value) === index);
+  const user = getUser();
+  return (user as { cooperativasIds?: number[] } | null)?.cooperativasIds ?? [1];
 }
 
 function getPreviousMonthSelection() {
@@ -129,7 +130,7 @@ export default function AdminLiquidacionesPage() {
     setError(null);
     try {
       const res = await fetch(`${TICKET_API_URL}/liquidaciones/cooperativa?${buildQuery()}`, {
-        headers: ADMIN_HEADERS,
+        headers: getAdminHeaders(),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -154,7 +155,7 @@ export default function AdminLiquidacionesPage() {
     setError(null);
     try {
       const res = await fetch(`${TICKET_API_URL}/liquidaciones/cooperativa/pdf?${buildQuery()}`, {
-        headers: ADMIN_HEADERS,
+        headers: getAdminHeaders(),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

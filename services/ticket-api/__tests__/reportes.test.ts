@@ -139,10 +139,10 @@ beforeEach(() => {
 });
 
 describe('reportes boletos', () => {
-  it('sin rol ADMIN -> 403', async () => {
+  it('sin rol ADMIN -> 401', async () => {
     const res = await request(app).get('/reportes/boletos');
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('fecha invalida -> 400', async () => {
