@@ -1,0 +1,25 @@
+{
+  "name": "proyecto-saas",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "packageManager": "npm@10.2.3",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "logs:organize": "powershell -ExecutionPolicy Bypass -File .\\scripts\\organize-logs.ps1"
+  },
+  "devDependencies": {
+    "prettier": "^3.0.0",
+    "prisma": "^5.22.0",
+    "turbo": "^2.9.14"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
+}

@@ -1,0 +1,804 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { authHeaders } from '@/lib/auth';
+import styles from './transferencias.module.css';
+
+const TICKET_API_URL = process.env.NEXT_PUBLIC_TICKET_API_URL || 'http://localhost:3003';
+const MIN_MOTIVO = 5;
+
+type Tab = 'pendientes' | 'historial';
+type EstadoHistorialFiltro = 'TODOS' | 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+type MetodoPagoHistorialFiltro = 'TODOS' | 'TRANSFERENCIA' | 'TARJETA' | 'EFECTIVO';
+
+interface FiltrosPendientes {
+  cedula: string;
+}
+
+interface FiltrosHistorial {
+  estado: EstadoHistorialFiltro;
+  metodoPago: MetodoPagoHistorialFiltro;
+  cedula: string;
+  fechaDesde: string;
+  fechaHasta: string;
+}
+
+const FILTROS_PENDIENTES_VACIO: FiltrosPendientes = { cedula: '' };
+const FILTROS_HISTORIAL_VACIO: FiltrosHistorial = {
+  estado: 'TODOS',
+  metodoPago: 'TODOS',
+  cedula: '',
+  fechaDesde: '',
+  fechaHasta: '',
+};
+
+function maskCedula(cedula: string | null | undefined): string {
+  if (!cedula) return '-';
+  if (cedula.length <= 4) return '***';
+  return `${cedula.slice(0, 2)}${'*'.repeat(Math.max(0, cedula.length - 4))}${cedula.slice(-2)}`;
+}
+
+function buildQueryString(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value && value.trim()) search.set(key, value.trim());
+  }
+  const query = search.toString();
+  return query ? `?${query}` : '';
+}
+
+function formatMetodoPago(metodoPago: MetodoPagoHistorialFiltro | string): string {
+  switch (metodoPago) {
+    case 'TRANSFERENCIA':
+      return 'Transferencia';
+    case 'TARJETA':
+      return 'Tarjeta';
+    case 'EFECTIVO':
+      return 'Efectivo';
+    default:
+      return metodoPago;
+  }
+}
+
+function formatCanalVenta(canalVenta: string | null | undefined): string {
+  if (!canalVenta) return '-';
+  switch (canalVenta) {
+    case 'OFICINISTA':
+      return 'Oficina';
+    case 'OFICINA':
+      return 'Oficina';
+    case 'OFICIAL':
+      return 'Bus';
+    default:
+      return canalVenta;
+  }
+}
+
+function formatFecha(fecha: string | null | undefined): string {
+  if (!fecha) return '-';
+  const parsed = new Date(fecha);
+  return Number.isNaN(parsed.getTime()) ? '-' : parsed.toLocaleString();
+}
+
+interface Pendiente {
+  id: number;
+  banco: string;
+  referencia: string;
+  estado: string;
+  comprobanteUrl: string | null;
+  creadoEn: string;
+  pago: { compra: { id: number; total: string; fechaViaje: string; turnoId: number | null } };
+}
+
+interface Detalle {
+  id: number;
+  banco: string;
+  referencia: string;
+  estado: string;
+  comprobanteUrl: string | null;
+  creadoEn: string;
+  pago: {
+    id: number;
+    compra: {
+      id: number;
+      total: string;
+      fechaViaje: string;
+      turnoId: number | null;
+      asientos: { id: number; asientoId: number; estado: string }[];
+      boletos: { id: number; nombrePasajero: string; cedulaPasajero: string }[];
+    };
+  };
+}
+
+interface HistorialPago {
+  id: number;
+  pagoId: number;
+  compraId: number;
+  metodoPago: 'TRANSFERENCIA' | 'TARJETA' | 'EFECTIVO';
+  estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+  total: string;
+  fechaReferencia: string | null;
+  fechaViaje: string | null;
+  turnoId: number | null;
+  compraEstado: string | null;
+  canalVenta: string | null;
+  pasajeroPrincipal: string | null;
+  cedulaPrincipal: string | null;
+  boletos: {
+    id: number;
+    nombrePasajero: string;
+    cedulaPasajero: string;
+    estado: string;
+    uuidQr: string;
+  }[];
+  transferencia: {
+    id: number;
+    banco: string;
+    referencia: string;
+    estado: string;
+    creadoEn: string;
+    revisadoEn: string | null;
+    oficinistaId: number | null;
+    observacion: string | null;
+  } | null;
+  tarjeta: {
+    id: number;
+    marca: string;
+    ultimos4: string;
+    referenciaPasarela: string;
+  } | null;
+  efectivo: {
+    id: number;
+    vendedorId: number;
+    montoRecibido: string;
+    cambio: string;
+    canalVenta: string;
+    turnoId: number | null;
+    offlineId: string | null;
+  } | null;
+}
+
+function buildDetallePago(item: HistorialPago): string {
+  if (item.transferencia) {
+    const extras = [
+      item.transferencia.banco,
+      item.transferencia.referencia,
+      item.transferencia.observacion,
+    ].filter(Boolean);
+    return extras.join(' · ');
+  }
+  if (item.tarjeta) {
+    return `${item.tarjeta.marca} ****${item.tarjeta.ultimos4}`;
+  }
+  if (item.efectivo) {
+    return `Cambio $${Number(item.efectivo.cambio).toFixed(2)} · ${formatCanalVenta(item.efectivo.canalVenta)}`;
+  }
+  return '-';
+}
+
+function getEstadoClass(estado: HistorialPago['estado'] | 'APROBADO' | 'RECHAZADO') {
+  if (estado === 'APROBADO') return styles.badgeOk;
+  if (estado === 'RECHAZADO') return styles.badgeFail;
+  return styles.badgeWarn;
+}
+
+function getMetodoClass(metodoPago: HistorialPago['metodoPago']) {
+  if (metodoPago === 'EFECTIVO') return styles.badgeMetodoCash;
+  if (metodoPago === 'TARJETA') return styles.badgeMetodoCard;
+  return styles.badgeMetodoTransfer;
+}
+
+export default function OficinistaTransferenciasPage() {
+  const [tab, setTab] = useState<Tab>('pendientes');
+  const [pendientes, setPendientes] = useState<Pendiente[]>([]);
+  const [historial, setHistorial] = useState<HistorialPago[]>([]);
+  const [totalPendientes, setTotalPendientes] = useState<number | null>(null);
+  const [totalHistorial, setTotalHistorial] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [detalle, setDetalle] = useState<Detalle | null>(null);
+  const [comprobanteUrl, setComprobanteUrl] = useState<string | null>(null);
+  const [comprobanteMime, setComprobanteMime] = useState('');
+  const [cargando, setCargando] = useState(false);
+  const [accion, setAccion] = useState<'idle' | 'aprobando' | 'rechazando'>('idle');
+  const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [motivo, setMotivo] = useState('');
+
+  const [filtrosPendientesActivos, setFiltrosPendientesActivos] =
+    useState<FiltrosPendientes>(FILTROS_PENDIENTES_VACIO);
+  const [filtrosPendientesForm, setFiltrosPendientesForm] =
+    useState<FiltrosPendientes>(FILTROS_PENDIENTES_VACIO);
+  const [filtrosHistorialActivos, setFiltrosHistorialActivos] =
+    useState<FiltrosHistorial>(FILTROS_HISTORIAL_VACIO);
+  const [filtrosHistorialForm, setFiltrosHistorialForm] =
+    useState<FiltrosHistorial>(FILTROS_HISTORIAL_VACIO);
+  const [buscando, setBuscando] = useState(false);
+
+  useEffect(() => {
+    setMensaje(null);
+    if (tab === 'pendientes') refreshPendientes(filtrosPendientesActivos);
+    else refreshHistorial(filtrosHistorialActivos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, filtrosPendientesActivos, filtrosHistorialActivos]);
+
+  useEffect(() => {
+    if (selectedId == null) {
+      setDetalle(null);
+      return;
+    }
+
+    let cancelado = false;
+    (async () => {
+      setCargando(true);
+      try {
+        const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${selectedId}`, {
+          headers: authHeaders(),
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const data: Detalle = await res.json();
+        if (!cancelado) setDetalle(data);
+      } catch {
+        if (!cancelado) setMensaje({ tipo: 'error', texto: 'No se pudo cargar el detalle.' });
+      } finally {
+        if (!cancelado) setCargando(false);
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!detalle) {
+      setComprobanteUrl(null);
+      setComprobanteMime('');
+      return;
+    }
+
+    let cancelado = false;
+    let objectUrl: string | null = null;
+
+    (async () => {
+      try {
+        const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${detalle.id}/comprobante`, {
+          headers: authHeaders(),
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const blob = await res.blob();
+        if (cancelado) return;
+        objectUrl = URL.createObjectURL(blob);
+        setComprobanteUrl(objectUrl);
+        setComprobanteMime(blob.type || '');
+      } catch {
+        if (!cancelado) {
+          setComprobanteUrl(null);
+          setComprobanteMime('');
+        }
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [detalle]);
+
+  async function refreshPendientes(filtros: FiltrosPendientes = FILTROS_PENDIENTES_VACIO) {
+    setBuscando(true);
+    try {
+      const qs = buildQueryString({ cedula: filtros.cedula });
+      const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/pendientes${qs}`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const data: Pendiente[] = await res.json();
+      setPendientes(data);
+      const total = Number(res.headers.get('X-Total-Count'));
+      setTotalPendientes(Number.isFinite(total) ? total : data.length);
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'No se pudieron cargar las transferencias pendientes.' });
+    } finally {
+      setBuscando(false);
+    }
+  }
+
+  async function refreshHistorial(filtros: FiltrosHistorial = FILTROS_HISTORIAL_VACIO) {
+    setBuscando(true);
+    try {
+      const qs = buildQueryString({
+        estado: filtros.estado !== 'TODOS' ? filtros.estado : undefined,
+        metodoPago: filtros.metodoPago !== 'TODOS' ? filtros.metodoPago : undefined,
+        cedula: filtros.cedula,
+        fechaDesde: filtros.fechaDesde,
+        fechaHasta: filtros.fechaHasta,
+      });
+      const res = await fetch(`${TICKET_API_URL}/aprobaciones/historial-pagos${qs}`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const data: HistorialPago[] = await res.json();
+      setHistorial(data);
+      const total = Number(res.headers.get('X-Total-Count'));
+      setTotalHistorial(Number.isFinite(total) ? total : data.length);
+    } catch {
+      setMensaje({ tipo: 'error', texto: 'No se pudo cargar el historial de pagos.' });
+    } finally {
+      setBuscando(false);
+    }
+  }
+
+  function handleBuscarPendientes() {
+    setSelectedId(null);
+    setFiltrosPendientesActivos({ cedula: filtrosPendientesForm.cedula.trim() });
+  }
+
+  function handleLimpiarPendientes() {
+    setSelectedId(null);
+    setFiltrosPendientesForm(FILTROS_PENDIENTES_VACIO);
+    setFiltrosPendientesActivos(FILTROS_PENDIENTES_VACIO);
+  }
+
+  function handleBuscarHistorial() {
+    setFiltrosHistorialActivos({
+      estado: filtrosHistorialForm.estado,
+      metodoPago: filtrosHistorialForm.metodoPago,
+      cedula: filtrosHistorialForm.cedula.trim(),
+      fechaDesde: filtrosHistorialForm.fechaDesde,
+      fechaHasta: filtrosHistorialForm.fechaHasta,
+    });
+  }
+
+  function handleLimpiarHistorial() {
+    setFiltrosHistorialForm(FILTROS_HISTORIAL_VACIO);
+    setFiltrosHistorialActivos(FILTROS_HISTORIAL_VACIO);
+  }
+
+  async function handleAprobar() {
+    if (!detalle) return;
+    setAccion('aprobando');
+    setMensaje(null);
+
+    try {
+      const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${detalle.id}/aprobar`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `Error ${res.status}`);
+      setMensaje({ tipo: 'ok', texto: `Transferencia #${detalle.id} aprobada. Boleto vigente.` });
+      setSelectedId(null);
+      await refreshPendientes(filtrosPendientesActivos);
+      if (tab === 'historial') await refreshHistorial(filtrosHistorialActivos);
+    } catch (err) {
+      setMensaje({
+        tipo: 'error',
+        texto: err instanceof Error ? err.message : 'No se pudo aprobar la transferencia.',
+      });
+    } finally {
+      setAccion('idle');
+    }
+  }
+
+  async function handleRechazar() {
+    if (!detalle) return;
+    if (motivo.trim().length < MIN_MOTIVO) {
+      setMensaje({ tipo: 'error', texto: `El motivo debe tener al menos ${MIN_MOTIVO} caracteres.` });
+      return;
+    }
+
+    setAccion('rechazando');
+    setMensaje(null);
+
+    try {
+      const res = await fetch(`${TICKET_API_URL}/pagos/transferencia/${detalle.id}/rechazar`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo: motivo.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `Error ${res.status}`);
+      setMensaje({ tipo: 'ok', texto: `Transferencia #${detalle.id} rechazada. Asientos liberados.` });
+      setShowModal(false);
+      setMotivo('');
+      setSelectedId(null);
+      await refreshPendientes(filtrosPendientesActivos);
+      if (tab === 'historial') await refreshHistorial(filtrosHistorialActivos);
+    } catch (err) {
+      setMensaje({
+        tipo: 'error',
+        texto: err instanceof Error ? err.message : 'No se pudo rechazar la transferencia.',
+      });
+    } finally {
+      setAccion('idle');
+    }
+  }
+
+  const esImagen = useMemo(() => comprobanteMime.startsWith('image/'), [comprobanteMime]);
+
+  return (
+    <main className={styles.main}>
+      <header className={styles.header}>
+        <h1 className={styles.title}>Revision de transferencias e historial de pagos</h1>
+        <p className={styles.subtitle}>
+          Aqui el oficinista aprueba comprobantes de transferencia y consulta el historial unificado
+          de boletos cobrados por transferencia, tarjeta y efectivo.
+        </p>
+        <nav className={styles.tabs}>
+          <button
+            className={`${styles.tab} ${tab === 'pendientes' ? styles.tabActive : ''}`}
+            onClick={() => setTab('pendientes')}
+          >
+            Pendientes de transferencia ({pendientes.length})
+          </button>
+          <button
+            className={`${styles.tab} ${tab === 'historial' ? styles.tabActive : ''}`}
+            onClick={() => setTab('historial')}
+          >
+            Historial de boletos
+          </button>
+        </nav>
+      </header>
+
+      {mensaje && (
+        <div className={mensaje.tipo === 'ok' ? styles.toastOk : styles.toastError}>
+          {mensaje.texto}
+        </div>
+      )}
+
+      {tab === 'pendientes' ? (
+        <>
+          <div className={styles.filtros}>
+            <div className={styles.filtroCampo}>
+              <label className={styles.filtroLabel} htmlFor="filtro-cedula-pend">
+                Buscar por cedula
+              </label>
+              <input
+                id="filtro-cedula-pend"
+                className={styles.filtroInput}
+                inputMode="numeric"
+                placeholder="Ej. 0102030405"
+                value={filtrosPendientesForm.cedula}
+                onChange={(e) =>
+                  setFiltrosPendientesForm({ ...filtrosPendientesForm, cedula: e.target.value })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleBuscarPendientes();
+                }}
+              />
+            </div>
+            <div className={styles.filtroAcciones}>
+              <button className={styles.filtroBtnPrim} onClick={handleBuscarPendientes} disabled={buscando}>
+                {buscando ? 'Buscando...' : 'Buscar'}
+              </button>
+              <button className={styles.filtroBtnSec} onClick={handleLimpiarPendientes} disabled={buscando}>
+                Limpiar
+              </button>
+            </div>
+          </div>
+
+          {totalPendientes !== null && (
+            <div className={styles.contadorResultados}>
+              {totalPendientes} pendiente{totalPendientes === 1 ? '' : 's'}
+              {filtrosPendientesActivos.cedula && ` para la cedula ${filtrosPendientesActivos.cedula}`}
+            </div>
+          )}
+
+          <div className={styles.layout}>
+            <aside className={styles.lista}>
+              {pendientes.length === 0 ? (
+                <p className={styles.muted}>
+                  {filtrosPendientesActivos.cedula
+                    ? 'No se encontraron transferencias pendientes para esa cedula.'
+                    : 'No hay transferencias pendientes.'}
+                </p>
+              ) : (
+                pendientes.map((p) => (
+                  <button
+                    key={p.id}
+                    className={`${styles.listItem} ${selectedId === p.id ? styles.listItemActive : ''}`}
+                    onClick={() => setSelectedId(p.id)}
+                  >
+                    <div className={styles.listItemTop}>
+                      <strong>Compra #{p.pago.compra.id}</strong>
+                      <span className={styles.listAmount}>${Number(p.pago.compra.total).toFixed(2)}</span>
+                    </div>
+                    <div className={styles.listItemBottom}>
+                      <span>{p.banco}</span>
+                      <span className={styles.muted}>{formatFecha(p.creadoEn)}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </aside>
+
+            <section className={styles.detalle}>
+              {!detalle && !cargando && (
+                <p className={styles.muted}>Selecciona un comprobante pendiente a la izquierda.</p>
+              )}
+              {cargando && <p>Cargando detalle...</p>}
+              {detalle && !cargando && (
+                <>
+                  <h2 className={styles.detalleTitle}>Compra #{detalle.pago.compra.id}</h2>
+                  <dl className={styles.dataGrid}>
+                    <div>
+                      <dt>Total</dt>
+                      <dd>${Number(detalle.pago.compra.total).toFixed(2)}</dd>
+                    </div>
+                    <div>
+                      <dt>Fecha viaje</dt>
+                      <dd>{new Date(detalle.pago.compra.fechaViaje).toLocaleDateString()}</dd>
+                    </div>
+                    <div>
+                      <dt>Banco</dt>
+                      <dd>{detalle.banco}</dd>
+                    </div>
+                    <div>
+                      <dt>Referencia</dt>
+                      <dd>
+                        <code>{detalle.referencia}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Subido</dt>
+                      <dd>{formatFecha(detalle.creadoEn)}</dd>
+                    </div>
+                  </dl>
+
+                  <h3 className={styles.sectionTitle}>Pasajeros</h3>
+                  <ul className={styles.pasajeros}>
+                    {detalle.pago.compra.boletos.map((b) => (
+                      <li key={b.id}>
+                        <strong>{b.nombrePasajero}</strong> · {maskCedula(b.cedulaPasajero)}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <h3 className={styles.sectionTitle}>Comprobante</h3>
+                  <div className={styles.previewBox}>
+                    {comprobanteUrl ? (
+                      esImagen ? (
+                        <img className={styles.previewImg} src={comprobanteUrl} alt="Comprobante" />
+                      ) : (
+                        <iframe className={styles.previewIframe} src={comprobanteUrl} title="Comprobante" />
+                      )
+                    ) : (
+                      <p className={styles.muted}>Cargando comprobante...</p>
+                    )}
+                  </div>
+
+                  <div className={styles.acciones}>
+                    <button className={styles.btnAprobar} onClick={handleAprobar} disabled={accion !== 'idle'}>
+                      {accion === 'aprobando' ? 'Aprobando...' : 'Aprobar'}
+                    </button>
+                    <button
+                      className={styles.btnRechazar}
+                      onClick={() => setShowModal(true)}
+                      disabled={accion !== 'idle'}
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={styles.filtros}>
+            <div className={styles.filtroCampoSm}>
+              <label className={styles.filtroLabel} htmlFor="filtro-metodo">
+                Metodo de pago
+              </label>
+              <select
+                id="filtro-metodo"
+                className={styles.filtroSelect}
+                value={filtrosHistorialForm.metodoPago}
+                onChange={(e) =>
+                  setFiltrosHistorialForm({
+                    ...filtrosHistorialForm,
+                    metodoPago: e.target.value as MetodoPagoHistorialFiltro,
+                  })
+                }
+              >
+                <option value="TODOS">Todos</option>
+                <option value="TRANSFERENCIA">Transferencia</option>
+                <option value="TARJETA">Tarjeta</option>
+                <option value="EFECTIVO">Efectivo</option>
+              </select>
+            </div>
+
+            <div className={styles.filtroCampoSm}>
+              <label className={styles.filtroLabel} htmlFor="filtro-estado">
+                Estado
+              </label>
+              <select
+                id="filtro-estado"
+                className={styles.filtroSelect}
+                value={filtrosHistorialForm.estado}
+                onChange={(e) =>
+                  setFiltrosHistorialForm({
+                    ...filtrosHistorialForm,
+                    estado: e.target.value as EstadoHistorialFiltro,
+                  })
+                }
+              >
+                <option value="TODOS">Todos</option>
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="APROBADO">Aprobado</option>
+                <option value="RECHAZADO">Rechazado</option>
+              </select>
+            </div>
+
+            <div className={styles.filtroCampo}>
+              <label className={styles.filtroLabel} htmlFor="filtro-cedula-hist">
+                Cedula
+              </label>
+              <input
+                id="filtro-cedula-hist"
+                className={styles.filtroInput}
+                inputMode="numeric"
+                placeholder="Ej. 0102030405"
+                value={filtrosHistorialForm.cedula}
+                onChange={(e) =>
+                  setFiltrosHistorialForm({ ...filtrosHistorialForm, cedula: e.target.value })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleBuscarHistorial();
+                }}
+              />
+            </div>
+
+            <div className={styles.filtroCampoSm}>
+              <label className={styles.filtroLabel} htmlFor="filtro-desde">
+                Fecha desde
+              </label>
+              <input
+                id="filtro-desde"
+                type="date"
+                className={styles.filtroInput}
+                value={filtrosHistorialForm.fechaDesde}
+                onChange={(e) =>
+                  setFiltrosHistorialForm({ ...filtrosHistorialForm, fechaDesde: e.target.value })
+                }
+              />
+            </div>
+
+            <div className={styles.filtroCampoSm}>
+              <label className={styles.filtroLabel} htmlFor="filtro-hasta">
+                Fecha hasta
+              </label>
+              <input
+                id="filtro-hasta"
+                type="date"
+                className={styles.filtroInput}
+                value={filtrosHistorialForm.fechaHasta}
+                onChange={(e) =>
+                  setFiltrosHistorialForm({ ...filtrosHistorialForm, fechaHasta: e.target.value })
+                }
+              />
+            </div>
+
+            <div className={styles.filtroAcciones}>
+              <button className={styles.filtroBtnPrim} onClick={handleBuscarHistorial} disabled={buscando}>
+                {buscando ? 'Buscando...' : 'Buscar'}
+              </button>
+              <button className={styles.filtroBtnSec} onClick={handleLimpiarHistorial} disabled={buscando}>
+                Limpiar
+              </button>
+            </div>
+          </div>
+
+          {totalHistorial !== null && (
+            <div className={styles.contadorResultados}>
+              {totalHistorial} resultado{totalHistorial === 1 ? '' : 's'}
+              {filtrosHistorialActivos.metodoPago !== 'TODOS' &&
+                ` · ${formatMetodoPago(filtrosHistorialActivos.metodoPago)}`}
+              {filtrosHistorialActivos.estado !== 'TODOS' && ` · ${filtrosHistorialActivos.estado}`}
+            </div>
+          )}
+
+          {historial.length === 0 ? (
+            <div className={styles.sinResultados}>
+              No se encontraron boletos en el historial para los filtros aplicados.
+            </div>
+          ) : (
+            <div className={styles.tablaWrap}>
+              <table className={styles.tabla}>
+                <thead>
+                  <tr>
+                    <th>Fecha / Hora</th>
+                    <th>Metodo</th>
+                    <th>Compra</th>
+                    <th>Pasajero</th>
+                    <th>Canal</th>
+                    <th>Estado</th>
+                    <th>Detalle</th>
+                    <th>Boleto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historial.map((item) => (
+                    <tr key={`${item.id}-${item.compraId}`}>
+                      <td>{formatFecha(item.fechaReferencia)}</td>
+                      <td>
+                        <span className={`${styles.badgeMetodo} ${getMetodoClass(item.metodoPago)}`}>
+                          {formatMetodoPago(item.metodoPago)}
+                        </span>
+                      </td>
+                      <td>
+                        <div className={styles.tableStrong}>#{item.compraId}</div>
+                        <div className={styles.tableMeta}>
+                          {item.boletos.length} boleto{item.boletos.length === 1 ? '' : 's'}
+                        </div>
+                      </td>
+                      <td>
+                        <div className={styles.tableStrong}>{item.pasajeroPrincipal ?? '-'}</div>
+                        <div className={styles.tableMeta}>{maskCedula(item.cedulaPrincipal)}</div>
+                      </td>
+                      <td>{formatCanalVenta(item.canalVenta)}</td>
+                      <td>
+                        <span className={getEstadoClass(item.estado)}>{item.estado}</span>
+                      </td>
+                      <td>
+                        <div className={styles.tableStrong}>{buildDetallePago(item)}</div>
+                        <div className={styles.tableMeta}>
+                          {item.turnoId ? `Turno #${item.turnoId}` : item.compraEstado ?? '-'}
+                        </div>
+                      </td>
+                      <td>
+                        <a className={styles.linkInline} href={`/boleto/${item.compraId}`}>
+                          Ver boleto
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {showModal && (
+        <div className={styles.modalBackdrop} onClick={() => accion !== 'rechazando' && setShowModal(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles.modalTitle}>Motivo del rechazo</h3>
+            <p className={styles.modalHint}>
+              Debe tener al menos {MIN_MOTIVO} caracteres. Se enviara al cliente.
+            </p>
+            <textarea
+              className={styles.textarea}
+              rows={4}
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Ej. El comprobante esta ilegible o no coincide el monto."
+              disabled={accion === 'rechazando'}
+            />
+            <div className={styles.modalActions}>
+              <button
+                className={styles.btnSecundario}
+                onClick={() => {
+                  setShowModal(false);
+                  setMotivo('');
+                }}
+                disabled={accion === 'rechazando'}
+              >
+                Cancelar
+              </button>
+              <button
+                className={styles.btnRechazar}
+                onClick={handleRechazar}
+                disabled={accion === 'rechazando' || motivo.trim().length < MIN_MOTIVO}
+              >
+                {accion === 'rechazando' ? 'Rechazando...' : 'Confirmar rechazo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
